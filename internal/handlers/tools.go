@@ -185,8 +185,8 @@ func (th *ToolHandlers) createListAllowedDirectoriesTool() mcp.Tool {
 
 func (th *ToolHandlers) handleReadFile(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Parse arguments with validation per Rule 7
-	args := req.Params.Arguments
-	if args == nil {
+	args, ok := req.Params.Arguments.(map[string]any)
+	if !ok || args == nil {
 		return mcp.NewToolResultError("Invalid arguments format"), nil
 	}
 
@@ -213,8 +213,8 @@ func (th *ToolHandlers) handleReadFile(ctx context.Context, req mcp.CallToolRequ
 
 func (th *ToolHandlers) handleReadMultipleFiles(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Parse arguments with validation per Rule 7
-	args := req.Params.Arguments
-	if args == nil {
+	args, ok := req.Params.Arguments.(map[string]any)
+	if !ok || args == nil {
 		return mcp.NewToolResultError("Invalid arguments format"), nil
 	}
 
@@ -253,8 +253,8 @@ func (th *ToolHandlers) handleReadMultipleFiles(ctx context.Context, req mcp.Cal
 
 func (th *ToolHandlers) handleWriteFile(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Parse arguments with validation per Rule 7
-	args := req.Params.Arguments
-	if args == nil {
+	args, ok := req.Params.Arguments.(map[string]any)
+	if !ok || args == nil {
 		return mcp.NewToolResultError("Invalid arguments format"), nil
 	}
 
@@ -286,8 +286,8 @@ func (th *ToolHandlers) handleWriteFile(ctx context.Context, req mcp.CallToolReq
 
 func (th *ToolHandlers) handleEditFile(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Parse arguments with validation per Rule 7
-	args := req.Params.Arguments
-	if args == nil {
+	args, ok := req.Params.Arguments.(map[string]any)
+	if !ok || args == nil {
 		return mcp.NewToolResultError("Invalid arguments format"), nil
 	}
 
@@ -348,8 +348,8 @@ func (th *ToolHandlers) handleEditFile(ctx context.Context, req mcp.CallToolRequ
 
 func (th *ToolHandlers) handleCreateDirectory(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Parse arguments with validation per Rule 7
-	args := req.Params.Arguments
-	if args == nil {
+	args, ok := req.Params.Arguments.(map[string]any)
+	if !ok || args == nil {
 		return mcp.NewToolResultError("Invalid arguments format"), nil
 	}
 
@@ -376,8 +376,8 @@ func (th *ToolHandlers) handleCreateDirectory(ctx context.Context, req mcp.CallT
 
 func (th *ToolHandlers) handleListDirectory(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Parse arguments with validation per Rule 7
-	args := req.Params.Arguments
-	if args == nil {
+	args, ok := req.Params.Arguments.(map[string]any)
+	if !ok || args == nil {
 		return mcp.NewToolResultError("Invalid arguments format"), nil
 	}
 
@@ -404,8 +404,8 @@ func (th *ToolHandlers) handleListDirectory(ctx context.Context, req mcp.CallToo
 
 func (th *ToolHandlers) handleDirectoryTree(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Parse arguments with validation per Rule 7
-	args := req.Params.Arguments
-	if args == nil {
+	args, ok := req.Params.Arguments.(map[string]any)
+	if !ok || args == nil {
 		return mcp.NewToolResultError("Invalid arguments format"), nil
 	}
 
@@ -432,8 +432,8 @@ func (th *ToolHandlers) handleDirectoryTree(ctx context.Context, req mcp.CallToo
 
 func (th *ToolHandlers) handleMoveFile(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Parse arguments with validation per Rule 7
-	args := req.Params.Arguments
-	if args == nil {
+	args, ok := req.Params.Arguments.(map[string]any)
+	if !ok || args == nil {
 		return mcp.NewToolResultError("Invalid arguments format"), nil
 	}
 
@@ -471,8 +471,8 @@ func (th *ToolHandlers) handleMoveFile(ctx context.Context, req mcp.CallToolRequ
 
 func (th *ToolHandlers) handleSearchFiles(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Parse arguments with validation per Rule 7
-	args := req.Params.Arguments
-	if args == nil {
+	args, ok := req.Params.Arguments.(map[string]any)
+	if !ok || args == nil {
 		return mcp.NewToolResultError("Invalid arguments format"), nil
 	}
 
@@ -521,8 +521,8 @@ func (th *ToolHandlers) handleSearchFiles(ctx context.Context, req mcp.CallToolR
 
 func (th *ToolHandlers) handleGetFileInfo(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Parse arguments with validation per Rule 7
-	args := req.Params.Arguments
-	if args == nil {
+	args, ok := req.Params.Arguments.(map[string]any)
+	if !ok || args == nil {
 		return mcp.NewToolResultError("Invalid arguments format"), nil
 	}
 
