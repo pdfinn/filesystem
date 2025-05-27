@@ -318,7 +318,10 @@ func (ops *Operations) DirectoryTree(dirPath string) (string, error) {
 
 	ops.logger.Debug("Building directory tree", "path", dirPath)
 
-	tree, err := ops.buildTree(dirPath)
+	// Track visited real paths to avoid infinite recursion
+	visited := make(map[string]bool)
+
+	tree, err := ops.buildTree(dirPath, visited)
 	if err != nil {
 		return "", err
 	}
@@ -335,7 +338,24 @@ func (ops *Operations) DirectoryTree(dirPath string) (string, error) {
 }
 
 // buildTree recursively builds a tree structure
-func (ops *Operations) buildTree(dirPath string) ([]TreeEntry, error) {
+func (ops *Operations) buildTree(dirPath string, visited map[string]bool) ([]TreeEntry, error) {
+	realPath, err := filepath.EvalSymlinks(dirPath)
+	if err != nil {
+		// If symlink resolution fails, fall back to cleaned path
+		realPath = filepath.Clean(dirPath)
+	}
+
+	// Normalize to absolute path for consistent map keys
+	if abs, err := filepath.Abs(realPath); err == nil {
+		realPath = abs
+	}
+
+	if visited[realPath] {
+		ops.logger.Debug("Skipping already visited path", "path", realPath)
+		return []TreeEntry{}, nil
+	}
+	visited[realPath] = true
+
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read directory: %w", err)
@@ -357,7 +377,7 @@ func (ops *Operations) buildTree(dirPath string) ([]TreeEntry, error) {
 
 			// Recursively build subtree
 			subPath := filepath.Join(dirPath, entry.Name())
-			children, err := ops.buildTree(subPath)
+			children, err := ops.buildTree(subPath, visited)
 			if err != nil {
 				ops.logger.Warn("Failed to build subtree", "path", subPath, "error", err)
 				// Continue with empty children rather than failing
