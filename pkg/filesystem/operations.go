@@ -329,14 +329,13 @@ func (ops *Operations) ListDirectory(dirPath string) (string, error) {
 	return strings.Join(results, "\n"), nil
 }
 
-// DirectoryTree builds a recursive tree structure of a directory
+// DirectoryTree returns a JSON representation of a directory tree
 func (ops *Operations) DirectoryTree(dirPath string) (string, error) {
 	// Input validation per Rule 7
 	if dirPath == "" {
 		return "", fmt.Errorf("directory path cannot be empty")
 	}
 
-	// Validate the provided path
 	validPath, err := ops.pathValidator.ValidatePath(dirPath)
 	if err != nil {
 		return "", err
@@ -344,16 +343,10 @@ func (ops *Operations) DirectoryTree(dirPath string) (string, error) {
 
 	ops.logger.Debug("Building directory tree", "path", validPath)
 
-	// Validate root directory is within allowed paths
-	validPath, err := ops.pathValidator.ValidatePath(dirPath)
-	if err != nil {
-		return "", err
-	}
-
 	// Track visited real paths to avoid infinite recursion
 	visited := make(map[string]bool)
 
-	tree, err := ops.buildTree(validPath, visited)
+	tree, err := ops.buildTree(validPath, visited, 0)
 	if err != nil {
 		return "", err
 	}
@@ -453,7 +446,7 @@ func (ops *Operations) MoveFile(sourcePath, destPath string) error {
 		return fmt.Errorf("failed to check destination: %w", err)
 	}
 
-	err := rename(sourcePath, destPath)
+	err := os.Rename(sourcePath, destPath)
 	if err != nil {
 		// Detect cross-device rename and fallback to copy/remove
 		if linkErr, ok := err.(*os.LinkError); ok && errors.Is(linkErr.Err, syscall.EXDEV) {
