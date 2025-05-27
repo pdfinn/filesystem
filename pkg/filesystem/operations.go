@@ -20,7 +20,8 @@ import (
 	"filesystem/pkg/security"
 )
 
-const maxReadSize int64 = 1 * 1024 * 1024 // 1MB
+const maxReadSize int64 = 1 * 1024 * 1024  // 1MB
+const maxWriteSize int64 = 1 * 1024 * 1024 // 1MB
 
 // maxTreeDepth defines the maximum depth DirectoryTree will recurse
 const maxTreeDepth int = 20
@@ -125,6 +126,11 @@ func (ops *Operations) WriteFile(filePath, content string) error {
 	// Input validation per Rule 7
 	if filePath == "" {
 		return fmt.Errorf("file path cannot be empty")
+	}
+
+	if int64(len(content)) > maxWriteSize {
+		ops.logger.Warn("Content size exceeds limit", "path", filePath, "size", len(content))
+		return fmt.Errorf("content exceeds maximum allowed size")
 	}
 
 	ops.logger.Debug("Writing file", "path", filePath, "size", len(content))
