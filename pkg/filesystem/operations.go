@@ -383,7 +383,7 @@ func (ops *Operations) buildTree(dirPath string, visited map[string]bool) ([]Tre
 				// Skip this directory if validation fails
 				continue
 			}
-			children, err := ops.buildTree(validPath)
+			children, err := ops.buildTree(validPath, visited)
 			if err != nil {
 				ops.logger.Warn("Failed to build subtree", "path", subPath, "error", err)
 				// Continue with empty children rather than failing

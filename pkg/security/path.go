@@ -41,7 +41,7 @@ func (pv *PathValidator) ValidatePath(requestedPath string) (string, error) {
 	}
 
 	// Expand home directory if needed
-	expandedPath := pv.expandHomePath(requestedPath)
+	expandedPath := ExpandHomePath(requestedPath)
 
 	// Convert to absolute path
 	var absolutePath string
@@ -80,16 +80,7 @@ func (pv *PathValidator) ValidatePath(requestedPath string) (string, error) {
 
 // expandHomePath expands ~ and ~/ in file paths
 func (pv *PathValidator) expandHomePath(path string) string {
-	if path == "~" {
-		if homeDir, err := os.UserHomeDir(); err == nil {
-			return homeDir
-		}
-	} else if len(path) > 1 && path[:2] == "~/" {
-		if homeDir, err := os.UserHomeDir(); err == nil {
-			return filepath.Join(homeDir, path[2:])
-		}
-	}
-	return path
+	return ExpandHomePath(path)
 }
 
 // isPathAllowed checks if a path is within any allowed directory

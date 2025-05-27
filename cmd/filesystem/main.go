@@ -11,6 +11,7 @@ import (
 
 	"filesystem/internal/server"
 	"filesystem/pkg/config"
+	"filesystem/pkg/security"
 )
 
 const (
@@ -131,18 +132,8 @@ func validateCommandLineDirectories(cfg *config.Config) error {
 	for i, dir := range cfg.AllowedDirectories {
 
 		// Expand home directory if needed
-		if dir == "~" || (len(dir) > 1 && dir[:2] == "~/") {
-			homeDir, err := os.UserHomeDir()
-			if err != nil {
-				return fmt.Errorf("failed to get home directory: %w", err)
-			}
-			if dir == "~" {
-				dir = homeDir
-			} else {
-				dir = homeDir + dir[1:]
-			}
-			cfg.AllowedDirectories[i] = dir
-		}
+		dir = security.ExpandHomePath(dir)
+		cfg.AllowedDirectories[i] = dir
 
 		// Check if directory exists and is accessible
 		info, err := os.Stat(dir)
