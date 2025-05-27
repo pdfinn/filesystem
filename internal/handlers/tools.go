@@ -50,9 +50,8 @@ func (th *ToolHandlers) RegisterTools(srv *server.MCPServer) error {
 		{th.createListAllowedDirectoriesTool(), th.handleListAllowedDirectories},
 	}
 
-	// Register each tool with fixed upper bound per Rule 2
-	for i := 0; i < len(tools) && i < 20; i++ {
-		tool := tools[i]
+	// Register each tool
+	for _, tool := range tools {
 		srv.AddTool(tool.tool, tool.handler)
 		th.logger.Debug("Tool registered successfully", "tool", tool.tool.Name)
 	}
@@ -185,8 +184,8 @@ func (th *ToolHandlers) createListAllowedDirectoriesTool() mcp.Tool {
 
 func (th *ToolHandlers) handleReadFile(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Parse arguments with validation per Rule 7
-	args := req.Params.Arguments
-	if args == nil {
+	args, ok := req.Params.Arguments.(map[string]any)
+	if !ok || args == nil {
 		return mcp.NewToolResultError("Invalid arguments format"), nil
 	}
 
@@ -213,8 +212,8 @@ func (th *ToolHandlers) handleReadFile(ctx context.Context, req mcp.CallToolRequ
 
 func (th *ToolHandlers) handleReadMultipleFiles(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Parse arguments with validation per Rule 7
-	args := req.Params.Arguments
-	if args == nil {
+	args, ok := req.Params.Arguments.(map[string]any)
+	if !ok || args == nil {
 		return mcp.NewToolResultError("Invalid arguments format"), nil
 	}
 
@@ -223,10 +222,10 @@ func (th *ToolHandlers) handleReadMultipleFiles(ctx context.Context, req mcp.Cal
 		return mcp.NewToolResultError("Paths parameter is required"), nil
 	}
 
-	// Convert to string slice with fixed upper bound per Rule 2
+	// Convert to string slice
 	paths := make([]string, 0, len(pathsInterface))
-	for i := 0; i < len(pathsInterface) && i < 100; i++ {
-		if path, ok := pathsInterface[i].(string); ok && path != "" {
+	for _, p := range pathsInterface {
+		if path, ok := p.(string); ok && path != "" {
 			// Validate each path
 			validPath, err := th.pathValidator.ValidatePath(path)
 			if err != nil {
@@ -253,8 +252,8 @@ func (th *ToolHandlers) handleReadMultipleFiles(ctx context.Context, req mcp.Cal
 
 func (th *ToolHandlers) handleWriteFile(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Parse arguments with validation per Rule 7
-	args := req.Params.Arguments
-	if args == nil {
+	args, ok := req.Params.Arguments.(map[string]any)
+	if !ok || args == nil {
 		return mcp.NewToolResultError("Invalid arguments format"), nil
 	}
 
@@ -286,8 +285,8 @@ func (th *ToolHandlers) handleWriteFile(ctx context.Context, req mcp.CallToolReq
 
 func (th *ToolHandlers) handleEditFile(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Parse arguments with validation per Rule 7
-	args := req.Params.Arguments
-	if args == nil {
+	args, ok := req.Params.Arguments.(map[string]any)
+	if !ok || args == nil {
 		return mcp.NewToolResultError("Invalid arguments format"), nil
 	}
 
@@ -308,10 +307,10 @@ func (th *ToolHandlers) handleEditFile(ctx context.Context, req mcp.CallToolRequ
 		}
 	}
 
-	// Parse edits with fixed upper bound per Rule 2
+	// Parse edits
 	edits := make([]filesystem.EditOperation, 0, len(editsInterface))
-	for i := 0; i < len(editsInterface) && i < 100; i++ {
-		editMap, ok := editsInterface[i].(map[string]interface{})
+	for _, e := range editsInterface {
+		editMap, ok := e.(map[string]interface{})
 		if !ok {
 			continue
 		}
@@ -348,8 +347,8 @@ func (th *ToolHandlers) handleEditFile(ctx context.Context, req mcp.CallToolRequ
 
 func (th *ToolHandlers) handleCreateDirectory(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Parse arguments with validation per Rule 7
-	args := req.Params.Arguments
-	if args == nil {
+	args, ok := req.Params.Arguments.(map[string]any)
+	if !ok || args == nil {
 		return mcp.NewToolResultError("Invalid arguments format"), nil
 	}
 
@@ -376,8 +375,8 @@ func (th *ToolHandlers) handleCreateDirectory(ctx context.Context, req mcp.CallT
 
 func (th *ToolHandlers) handleListDirectory(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Parse arguments with validation per Rule 7
-	args := req.Params.Arguments
-	if args == nil {
+	args, ok := req.Params.Arguments.(map[string]any)
+	if !ok || args == nil {
 		return mcp.NewToolResultError("Invalid arguments format"), nil
 	}
 
@@ -404,8 +403,8 @@ func (th *ToolHandlers) handleListDirectory(ctx context.Context, req mcp.CallToo
 
 func (th *ToolHandlers) handleDirectoryTree(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Parse arguments with validation per Rule 7
-	args := req.Params.Arguments
-	if args == nil {
+	args, ok := req.Params.Arguments.(map[string]any)
+	if !ok || args == nil {
 		return mcp.NewToolResultError("Invalid arguments format"), nil
 	}
 
@@ -432,8 +431,8 @@ func (th *ToolHandlers) handleDirectoryTree(ctx context.Context, req mcp.CallToo
 
 func (th *ToolHandlers) handleMoveFile(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Parse arguments with validation per Rule 7
-	args := req.Params.Arguments
-	if args == nil {
+	args, ok := req.Params.Arguments.(map[string]any)
+	if !ok || args == nil {
 		return mcp.NewToolResultError("Invalid arguments format"), nil
 	}
 
@@ -471,8 +470,8 @@ func (th *ToolHandlers) handleMoveFile(ctx context.Context, req mcp.CallToolRequ
 
 func (th *ToolHandlers) handleSearchFiles(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Parse arguments with validation per Rule 7
-	args := req.Params.Arguments
-	if args == nil {
+	args, ok := req.Params.Arguments.(map[string]any)
+	if !ok || args == nil {
 		return mcp.NewToolResultError("Invalid arguments format"), nil
 	}
 
@@ -491,8 +490,8 @@ func (th *ToolHandlers) handleSearchFiles(ctx context.Context, req mcp.CallToolR
 	if excludeInterface, exists := args["excludePatterns"]; exists {
 		if excludeArray, ok := excludeInterface.([]interface{}); ok {
 			excludePatterns = make([]string, 0, len(excludeArray))
-			for i := 0; i < len(excludeArray) && i < 100; i++ {
-				if exclude, ok := excludeArray[i].(string); ok {
+			for _, ex := range excludeArray {
+				if exclude, ok := ex.(string); ok {
 					excludePatterns = append(excludePatterns, exclude)
 				}
 			}
@@ -521,8 +520,8 @@ func (th *ToolHandlers) handleSearchFiles(ctx context.Context, req mcp.CallToolR
 
 func (th *ToolHandlers) handleGetFileInfo(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Parse arguments with validation per Rule 7
-	args := req.Params.Arguments
-	if args == nil {
+	args, ok := req.Params.Arguments.(map[string]any)
+	if !ok || args == nil {
 		return mcp.NewToolResultError("Invalid arguments format"), nil
 	}
 

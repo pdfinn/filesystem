@@ -83,9 +83,8 @@ func (ops *Operations) ReadMultipleFiles(filePaths []string) (string, error) {
 
 	results := make([]string, 0, len(filePaths))
 
-	// Process files with fixed upper bound per Rule 2
-	for i := 0; i < len(filePaths) && i < 100; i++ {
-		filePath := filePaths[i]
+	// Process files
+	for _, filePath := range filePaths {
 
 		content, err := ops.ReadFile(filePath)
 		if err != nil {
@@ -166,9 +165,8 @@ func (ops *Operations) EditFile(filePath string, edits []EditOperation, dryRun b
 func (ops *Operations) applyEdits(content string, edits []EditOperation) (string, error) {
 	modifiedContent := ops.normalizeLineEndings(content)
 
-	// Apply edits sequentially with fixed upper bound per Rule 2
-	for i := 0; i < len(edits) && i < 100; i++ {
-		edit := edits[i]
+	// Apply edits sequentially
+	for i, edit := range edits {
 		oldText := ops.normalizeLineEndings(edit.OldText)
 		newText := ops.normalizeLineEndings(edit.NewText)
 
@@ -192,8 +190,8 @@ func (ops *Operations) applyLineBasedEdit(content *string, oldText, newText stri
 	oldLines := strings.Split(oldText, "\n")
 	contentLines := strings.Split(*content, "\n")
 
-	// Search for matching lines with fixed upper bound per Rule 2
-	for i := 0; i <= len(contentLines)-len(oldLines) && i < 10000; i++ {
+	// Search for matching lines
+	for i := 0; i <= len(contentLines)-len(oldLines); i++ {
 		if ops.linesMatch(contentLines[i:i+len(oldLines)], oldLines) {
 			// Replace matched lines
 			newLines := strings.Split(newText, "\n")
@@ -220,8 +218,8 @@ func (ops *Operations) linesMatch(contentLines, oldLines []string) bool {
 		return false
 	}
 
-	// Compare lines with fixed upper bound per Rule 2
-	for i := 0; i < len(oldLines) && i < 1000; i++ {
+	// Compare lines
+	for i := 0; i < len(oldLines); i++ {
 		if strings.TrimSpace(contentLines[i]) != strings.TrimSpace(oldLines[i]) {
 			return false
 		}
@@ -299,9 +297,8 @@ func (ops *Operations) ListDirectory(dirPath string) (string, error) {
 
 	results := make([]string, 0, len(entries))
 
-	// Process entries with fixed upper bound per Rule 2
-	for i := 0; i < len(entries) && i < 10000; i++ {
-		entry := entries[i]
+	// Process entries
+	for _, entry := range entries {
 		prefix := "[FILE]"
 		if entry.IsDir() {
 			prefix = "[DIR]"
@@ -322,7 +319,10 @@ func (ops *Operations) DirectoryTree(dirPath string) (string, error) {
 
 	ops.logger.Debug("Building directory tree", "path", dirPath)
 
-	tree, err := ops.buildTree(dirPath)
+	// Track visited real paths to avoid infinite recursion
+	visited := make(map[string]bool)
+
+	tree, err := ops.buildTree(dirPath, visited)
 	if err != nil {
 		return "", err
 	}
@@ -339,7 +339,24 @@ func (ops *Operations) DirectoryTree(dirPath string) (string, error) {
 }
 
 // buildTree recursively builds a tree structure
-func (ops *Operations) buildTree(dirPath string) ([]TreeEntry, error) {
+func (ops *Operations) buildTree(dirPath string, visited map[string]bool) ([]TreeEntry, error) {
+	realPath, err := filepath.EvalSymlinks(dirPath)
+	if err != nil {
+		// If symlink resolution fails, fall back to cleaned path
+		realPath = filepath.Clean(dirPath)
+	}
+
+	// Normalize to absolute path for consistent map keys
+	if abs, err := filepath.Abs(realPath); err == nil {
+		realPath = abs
+	}
+
+	if visited[realPath] {
+		ops.logger.Debug("Skipping already visited path", "path", realPath)
+		return []TreeEntry{}, nil
+	}
+	visited[realPath] = true
+
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read directory: %w", err)
@@ -347,9 +364,8 @@ func (ops *Operations) buildTree(dirPath string) ([]TreeEntry, error) {
 
 	result := make([]TreeEntry, 0, len(entries))
 
-	// Process entries with fixed upper bound per Rule 2
-	for i := 0; i < len(entries) && i < 10000; i++ {
-		entry := entries[i]
+	// Process entries
+	for _, entry := range entries {
 
 		treeEntry := TreeEntry{
 			Name: entry.Name(),
@@ -449,11 +465,6 @@ func (ops *Operations) SearchFiles(rootPath, pattern string, excludePatterns []s
 			results = append(results, path)
 		}
 
-		// Limit results per Rule 2
-		if len(results) >= 1000 {
-			return fmt.Errorf("too many results, limiting to 1000")
-		}
-
 		return nil
 	})
 
@@ -468,9 +479,8 @@ func (ops *Operations) SearchFiles(rootPath, pattern string, excludePatterns []s
 
 // shouldExclude checks if a path should be excluded based on patterns
 func (ops *Operations) shouldExclude(relativePath string, excludePatterns []string) bool {
-	// Check exclude patterns with fixed upper bound per Rule 2
-	for i := 0; i < len(excludePatterns) && i < 100; i++ {
-		pattern := excludePatterns[i]
+	// Check exclude patterns
+	for _, pattern := range excludePatterns {
 
 		// Add glob pattern if not present
 		if !strings.Contains(pattern, "*") {

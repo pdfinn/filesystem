@@ -5,8 +5,8 @@ go 1.23
 toolchain go1.24.2
 
 require (
-	github.com/bmatcuk/doublestar/v4 v4.6.1
-	github.com/mark3labs/mcp-go v0.28.0
+	github.com/bmatcuk/doublestar/v4 v4.8.1
+	github.com/mark3labs/mcp-go v0.30.0
 	github.com/sergi/go-diff v1.3.1
 	gopkg.in/yaml.v3 v3.0.1
 )
