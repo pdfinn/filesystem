@@ -107,9 +107,8 @@ func validateConfig(cfg *Config) error {
 func normalizeDirectories(cfg *Config) error {
 	normalizedDirs := make([]string, 0, len(cfg.AllowedDirectories))
 
-	// Process each directory with fixed upper bound per Rule 2
-	for i := 0; i < len(cfg.AllowedDirectories) && i < 100; i++ {
-		dir := cfg.AllowedDirectories[i]
+	// Process each directory
+	for _, dir := range cfg.AllowedDirectories {
 
 		// Expand home directory if needed
 		if dir == "~" || len(dir) > 1 && dir[:2] == "~/" {

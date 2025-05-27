@@ -127,9 +127,8 @@ func validateCommandLineDirectories(cfg *config.Config) error {
 		return fmt.Errorf("at least one directory must be specified")
 	}
 
-	// Validate each directory with fixed upper bound per Rule 2
-	for i := 0; i < len(cfg.AllowedDirectories) && i < 100; i++ {
-		dir := cfg.AllowedDirectories[i]
+	// Validate each directory
+	for i, dir := range cfg.AllowedDirectories {
 
 		// Expand home directory if needed
 		if dir == "~" || (len(dir) > 1 && dir[:2] == "~/") {
@@ -138,20 +137,21 @@ func validateCommandLineDirectories(cfg *config.Config) error {
 				return fmt.Errorf("failed to get home directory: %w", err)
 			}
 			if dir == "~" {
-				cfg.AllowedDirectories[i] = homeDir
+				dir = homeDir
 			} else {
-				cfg.AllowedDirectories[i] = homeDir + dir[1:]
+				dir = homeDir + dir[1:]
 			}
+			cfg.AllowedDirectories[i] = dir
 		}
 
 		// Check if directory exists and is accessible
-		info, err := os.Stat(cfg.AllowedDirectories[i])
+		info, err := os.Stat(dir)
 		if err != nil {
-			return fmt.Errorf("directory %s is not accessible: %w", cfg.AllowedDirectories[i], err)
+			return fmt.Errorf("directory %s is not accessible: %w", dir, err)
 		}
 
 		if !info.IsDir() {
-			return fmt.Errorf("path %s is not a directory", cfg.AllowedDirectories[i])
+			return fmt.Errorf("path %s is not a directory", dir)
 		}
 	}
 
