@@ -10,11 +10,14 @@ import (
 
 // getArguments extracts the argument map from the request and validates its presence.
 func getArguments(req mcp.CallToolRequest) (map[string]interface{}, *mcp.CallToolResult) {
-	args := req.Params.Arguments
-	if args == nil {
+	raw := req.Params.Arguments
+	if raw == nil {
 		return nil, mcp.NewToolResultError("Invalid arguments format")
 	}
-	return args, nil
+	if params, ok := raw.(map[string]interface{}); ok {
+		return params, nil
+	}
+	return nil, mcp.NewToolResultError("Invalid arguments format")
 }
 
 // getRequiredString extracts a required string parameter from the argument map.
