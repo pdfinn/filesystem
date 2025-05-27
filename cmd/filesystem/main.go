@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"filesystem/internal/server"
@@ -133,7 +134,15 @@ func validateCommandLineDirectories(cfg *config.Config) error {
 
 		// Expand home directory if needed
 		dir = security.ExpandHomePath(dir)
-		cfg.AllowedDirectories[i] = dir
+
+		// Convert to absolute path
+		absDir, err := filepath.Abs(dir)
+		if err != nil {
+			return fmt.Errorf("failed to get absolute path for %s: %w", dir, err)
+		}
+
+		cfg.AllowedDirectories[i] = absDir
+		dir = absDir
 
 		// Check if directory exists and is accessible
 		info, err := os.Stat(dir)
