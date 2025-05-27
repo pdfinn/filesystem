@@ -148,4 +148,4 @@ help:
 	@echo "  dev         - Quick development cycle (fmt, lint, test, build)"
 	@echo "  dev-setup   - Install development tools"
 	@echo "  ci          - CI/CD pipeline"
-	@echo "  help        - Show this help" 
+	@echo "  help        - Show this help"
