@@ -1,0 +1,20 @@
+# Secure Filesystem MCP Server Configuration
+# This file defines the security boundaries and operational parameters
+# for the filesystem server implementation.
+
+server:
+  name: "secure-filesystem-server"
+  version: "1.0.0"
+  transport: "stdio"
+
+# Security Configuration
+# These directories define the security boundary - the server will ONLY
+# allow access to files and subdirectories within these paths.
+# Paths are validated and normalized during startup.
+allowed_directories:
+  - "test_dir"
+  - "."
+
+# Logging Configuration
+# Available levels: debug, info, warn, error
+log_level: "info" 

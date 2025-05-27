@@ -1,0 +1,505 @@
+package filesystem
+
+import (
+	"encoding/json"
+	"fmt"
+	"io/fs"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"time"
+
+	"github.com/bmatcuk/doublestar/v4"
+	"github.com/sergi/go-diff/diffmatchpatch"
+)
+
+// FileInfo represents detailed file information
+type FileInfo struct {
+	Size        int64     `json:"size"`
+	Created     time.Time `json:"created"`
+	Modified    time.Time `json:"modified"`
+	Accessed    time.Time `json:"accessed"`
+	IsDirectory bool      `json:"isDirectory"`
+	IsFile      bool      `json:"isFile"`
+	Permissions string    `json:"permissions"`
+}
+
+// TreeEntry represents a directory tree entry
+type TreeEntry struct {
+	Name     string       `json:"name"`
+	Type     string       `json:"type"`
+	Children *[]TreeEntry `json:"children,omitempty"`
+}
+
+// EditOperation represents a file edit operation
+type EditOperation struct {
+	OldText string `json:"oldText"`
+	NewText string `json:"newText"`
+}
+
+// Operations provides secure filesystem operations
+type Operations struct {
+	logger *slog.Logger
+}
+
+// NewOperations creates a new filesystem operations instance
+func NewOperations(logger *slog.Logger) *Operations {
+	return &Operations{
+		logger: logger,
+	}
+}
+
+// ReadFile reads a file's content
+func (ops *Operations) ReadFile(filePath string) (string, error) {
+	// Input validation per Rule 7
+	if filePath == "" {
+		return "", fmt.Errorf("file path cannot be empty")
+	}
+
+	ops.logger.Debug("Reading file", "path", filePath)
+
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		ops.logger.Error("Failed to read file", "path", filePath, "error", err)
+		return "", fmt.Errorf("failed to read file: %w", err)
+	}
+
+	ops.logger.Debug("File read successfully", "path", filePath, "size", len(data))
+	return string(data), nil
+}
+
+// ReadMultipleFiles reads multiple files and returns their contents
+func (ops *Operations) ReadMultipleFiles(filePaths []string) (string, error) {
+	// Input validation per Rule 7
+	if len(filePaths) == 0 {
+		return "", fmt.Errorf("no file paths provided")
+	}
+
+	results := make([]string, 0, len(filePaths))
+
+	// Process files with fixed upper bound per Rule 2
+	for i := 0; i < len(filePaths) && i < 100; i++ {
+		filePath := filePaths[i]
+
+		content, err := ops.ReadFile(filePath)
+		if err != nil {
+			// Continue processing other files even if one fails
+			result := fmt.Sprintf("%s: Error - %s", filePath, err.Error())
+			results = append(results, result)
+			ops.logger.Warn("Failed to read file in batch", "path", filePath, "error", err)
+		} else {
+			result := fmt.Sprintf("%s:\n%s\n", filePath, content)
+			results = append(results, result)
+		}
+	}
+
+	return strings.Join(results, "\n---\n"), nil
+}
+
+// WriteFile writes content to a file
+func (ops *Operations) WriteFile(filePath, content string) error {
+	// Input validation per Rule 7
+	if filePath == "" {
+		return fmt.Errorf("file path cannot be empty")
+	}
+
+	ops.logger.Debug("Writing file", "path", filePath, "size", len(content))
+
+	err := os.WriteFile(filePath, []byte(content), 0644)
+	if err != nil {
+		ops.logger.Error("Failed to write file", "path", filePath, "error", err)
+		return fmt.Errorf("failed to write file: %w", err)
+	}
+
+	ops.logger.Info("File written successfully", "path", filePath, "size", len(content))
+	return nil
+}
+
+// EditFile applies edits to a file and returns a diff
+func (ops *Operations) EditFile(filePath string, edits []EditOperation, dryRun bool) (string, error) {
+	// Input validation per Rule 7
+	if filePath == "" {
+		return "", fmt.Errorf("file path cannot be empty")
+	}
+	if len(edits) == 0 {
+		return "", fmt.Errorf("no edits provided")
+	}
+
+	ops.logger.Debug("Editing file", "path", filePath, "edits_count", len(edits), "dry_run", dryRun)
+
+	// Read original content
+	originalContent, err := ops.ReadFile(filePath)
+	if err != nil {
+		return "", err
+	}
+
+	// Apply edits
+	modifiedContent, err := ops.applyEdits(originalContent, edits)
+	if err != nil {
+		return "", err
+	}
+
+	// Create diff
+	diff := ops.createUnifiedDiff(originalContent, modifiedContent, filePath)
+
+	// Write file if not dry run
+	if !dryRun {
+		err = ops.WriteFile(filePath, modifiedContent)
+		if err != nil {
+			return "", err
+		}
+		ops.logger.Info("File edits applied", "path", filePath, "edits_count", len(edits))
+	} else {
+		ops.logger.Debug("Dry run completed", "path", filePath)
+	}
+
+	return diff, nil
+}
+
+// applyEdits applies a series of edits to content
+func (ops *Operations) applyEdits(content string, edits []EditOperation) (string, error) {
+	modifiedContent := ops.normalizeLineEndings(content)
+
+	// Apply edits sequentially with fixed upper bound per Rule 2
+	for i := 0; i < len(edits) && i < 100; i++ {
+		edit := edits[i]
+		oldText := ops.normalizeLineEndings(edit.OldText)
+		newText := ops.normalizeLineEndings(edit.NewText)
+
+		// Try exact match first
+		if strings.Contains(modifiedContent, oldText) {
+			modifiedContent = strings.Replace(modifiedContent, oldText, newText, 1)
+			continue
+		}
+
+		// Try line-by-line matching with whitespace flexibility
+		if err := ops.applyLineBasedEdit(&modifiedContent, oldText, newText); err != nil {
+			return "", fmt.Errorf("could not apply edit %d: %w", i+1, err)
+		}
+	}
+
+	return modifiedContent, nil
+}
+
+// applyLineBasedEdit applies an edit using line-by-line matching
+func (ops *Operations) applyLineBasedEdit(content *string, oldText, newText string) error {
+	oldLines := strings.Split(oldText, "\n")
+	contentLines := strings.Split(*content, "\n")
+
+	// Search for matching lines with fixed upper bound per Rule 2
+	for i := 0; i <= len(contentLines)-len(oldLines) && i < 10000; i++ {
+		if ops.linesMatch(contentLines[i:i+len(oldLines)], oldLines) {
+			// Replace matched lines
+			newLines := strings.Split(newText, "\n")
+
+			// Preserve indentation of first line
+			if len(newLines) > 0 && len(contentLines) > i {
+				originalIndent := ops.extractIndentation(contentLines[i])
+				newLines[0] = originalIndent + strings.TrimLeft(newLines[0], " \t")
+			}
+
+			// Replace lines
+			contentLines = append(contentLines[:i], append(newLines, contentLines[i+len(oldLines):]...)...)
+			*content = strings.Join(contentLines, "\n")
+			return nil
+		}
+	}
+
+	return fmt.Errorf("could not find matching lines for edit")
+}
+
+// linesMatch checks if two line slices match with whitespace normalization
+func (ops *Operations) linesMatch(contentLines, oldLines []string) bool {
+	if len(contentLines) != len(oldLines) {
+		return false
+	}
+
+	// Compare lines with fixed upper bound per Rule 2
+	for i := 0; i < len(oldLines) && i < 1000; i++ {
+		if strings.TrimSpace(contentLines[i]) != strings.TrimSpace(oldLines[i]) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// extractIndentation extracts leading whitespace from a line
+func (ops *Operations) extractIndentation(line string) string {
+	re := regexp.MustCompile(`^[ \t]*`)
+	return re.FindString(line)
+}
+
+// normalizeLineEndings normalizes line endings to Unix style
+func (ops *Operations) normalizeLineEndings(text string) string {
+	return strings.ReplaceAll(text, "\r\n", "\n")
+}
+
+// createUnifiedDiff creates a unified diff between original and modified content
+func (ops *Operations) createUnifiedDiff(original, modified, filename string) string {
+	dmp := diffmatchpatch.New()
+	diffs := dmp.DiffMain(original, modified, false)
+
+	// Create patch
+	patches := dmp.PatchMake(original, diffs)
+	patch := dmp.PatchToText(patches)
+
+	// Format with backticks
+	numBackticks := 3
+	for strings.Contains(patch, strings.Repeat("`", numBackticks)) {
+		numBackticks++
+		if numBackticks > 10 { // Safety bound per Rule 2
+			break
+		}
+	}
+
+	backticks := strings.Repeat("`", numBackticks)
+	return fmt.Sprintf("%sdiff\n%s%s\n\n", backticks, patch, backticks)
+}
+
+// CreateDirectory creates a directory and all parent directories
+func (ops *Operations) CreateDirectory(dirPath string) error {
+	// Input validation per Rule 7
+	if dirPath == "" {
+		return fmt.Errorf("directory path cannot be empty")
+	}
+
+	ops.logger.Debug("Creating directory", "path", dirPath)
+
+	err := os.MkdirAll(dirPath, 0755)
+	if err != nil {
+		ops.logger.Error("Failed to create directory", "path", dirPath, "error", err)
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	ops.logger.Info("Directory created successfully", "path", dirPath)
+	return nil
+}
+
+// ListDirectory lists the contents of a directory
+func (ops *Operations) ListDirectory(dirPath string) (string, error) {
+	// Input validation per Rule 7
+	if dirPath == "" {
+		return "", fmt.Errorf("directory path cannot be empty")
+	}
+
+	ops.logger.Debug("Listing directory", "path", dirPath)
+
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		ops.logger.Error("Failed to read directory", "path", dirPath, "error", err)
+		return "", fmt.Errorf("failed to read directory: %w", err)
+	}
+
+	results := make([]string, 0, len(entries))
+
+	// Process entries with fixed upper bound per Rule 2
+	for i := 0; i < len(entries) && i < 10000; i++ {
+		entry := entries[i]
+		prefix := "[FILE]"
+		if entry.IsDir() {
+			prefix = "[DIR]"
+		}
+		results = append(results, fmt.Sprintf("%s %s", prefix, entry.Name()))
+	}
+
+	ops.logger.Debug("Directory listed successfully", "path", dirPath, "entries_count", len(results))
+	return strings.Join(results, "\n"), nil
+}
+
+// DirectoryTree builds a recursive tree structure of a directory
+func (ops *Operations) DirectoryTree(dirPath string) (string, error) {
+	// Input validation per Rule 7
+	if dirPath == "" {
+		return "", fmt.Errorf("directory path cannot be empty")
+	}
+
+	ops.logger.Debug("Building directory tree", "path", dirPath)
+
+	tree, err := ops.buildTree(dirPath)
+	if err != nil {
+		return "", err
+	}
+
+	// Convert to JSON
+	jsonData, err := json.MarshalIndent(tree, "", "  ")
+	if err != nil {
+		ops.logger.Error("Failed to marshal tree to JSON", "error", err)
+		return "", fmt.Errorf("failed to create JSON tree: %w", err)
+	}
+
+	ops.logger.Debug("Directory tree built successfully", "path", dirPath)
+	return string(jsonData), nil
+}
+
+// buildTree recursively builds a tree structure
+func (ops *Operations) buildTree(dirPath string) ([]TreeEntry, error) {
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read directory: %w", err)
+	}
+
+	result := make([]TreeEntry, 0, len(entries))
+
+	// Process entries with fixed upper bound per Rule 2
+	for i := 0; i < len(entries) && i < 10000; i++ {
+		entry := entries[i]
+
+		treeEntry := TreeEntry{
+			Name: entry.Name(),
+			Type: "file",
+		}
+
+		if entry.IsDir() {
+			treeEntry.Type = "directory"
+
+			// Recursively build subtree
+			subPath := filepath.Join(dirPath, entry.Name())
+			children, err := ops.buildTree(subPath)
+			if err != nil {
+				ops.logger.Warn("Failed to build subtree", "path", subPath, "error", err)
+				// Continue with empty children rather than failing
+				children = []TreeEntry{}
+			}
+			treeEntry.Children = &children
+		}
+
+		result = append(result, treeEntry)
+	}
+
+	return result, nil
+}
+
+// MoveFile moves or renames a file or directory
+func (ops *Operations) MoveFile(sourcePath, destPath string) error {
+	// Input validation per Rule 7
+	if sourcePath == "" {
+		return fmt.Errorf("source path cannot be empty")
+	}
+	if destPath == "" {
+		return fmt.Errorf("destination path cannot be empty")
+	}
+
+	ops.logger.Debug("Moving file", "source", sourcePath, "destination", destPath)
+
+	err := os.Rename(sourcePath, destPath)
+	if err != nil {
+		ops.logger.Error("Failed to move file", "source", sourcePath, "destination", destPath, "error", err)
+		return fmt.Errorf("failed to move file: %w", err)
+	}
+
+	ops.logger.Info("File moved successfully", "source", sourcePath, "destination", destPath)
+	return nil
+}
+
+// SearchFiles recursively searches for files matching a pattern
+func (ops *Operations) SearchFiles(rootPath, pattern string, excludePatterns []string) ([]string, error) {
+	// Input validation per Rule 7
+	if rootPath == "" {
+		return nil, fmt.Errorf("root path cannot be empty")
+	}
+	if pattern == "" {
+		return nil, fmt.Errorf("search pattern cannot be empty")
+	}
+
+	ops.logger.Debug("Searching files", "root", rootPath, "pattern", pattern, "excludes", excludePatterns)
+
+	var results []string
+	lowerPattern := strings.ToLower(pattern)
+
+	err := filepath.WalkDir(rootPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			ops.logger.Warn("Error walking directory", "path", path, "error", err)
+			return nil // Continue walking
+		}
+
+		// Check exclude patterns
+		relativePath, relErr := filepath.Rel(rootPath, path)
+		if relErr == nil && ops.shouldExclude(relativePath, excludePatterns) {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		// Check if filename matches pattern
+		filename := strings.ToLower(d.Name())
+		if strings.Contains(filename, lowerPattern) {
+			results = append(results, path)
+		}
+
+		// Limit results per Rule 2
+		if len(results) >= 1000 {
+			return fmt.Errorf("too many results, limiting to 1000")
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		ops.logger.Error("Failed to search files", "error", err)
+		return nil, fmt.Errorf("failed to search files: %w", err)
+	}
+
+	ops.logger.Debug("File search completed", "root", rootPath, "results_count", len(results))
+	return results, nil
+}
+
+// shouldExclude checks if a path should be excluded based on patterns
+func (ops *Operations) shouldExclude(relativePath string, excludePatterns []string) bool {
+	// Check exclude patterns with fixed upper bound per Rule 2
+	for i := 0; i < len(excludePatterns) && i < 100; i++ {
+		pattern := excludePatterns[i]
+
+		// Add glob pattern if not present
+		if !strings.Contains(pattern, "*") {
+			pattern = "**/" + pattern + "/**"
+		}
+
+		matched, err := doublestar.Match(pattern, relativePath)
+		if err == nil && matched {
+			return true
+		}
+	}
+
+	return false
+}
+
+// GetFileInfo retrieves detailed information about a file or directory
+func (ops *Operations) GetFileInfo(filePath string) (*FileInfo, error) {
+	// Input validation per Rule 7
+	if filePath == "" {
+		return nil, fmt.Errorf("file path cannot be empty")
+	}
+
+	ops.logger.Debug("Getting file info", "path", filePath)
+
+	stat, err := os.Stat(filePath)
+	if err != nil {
+		ops.logger.Error("Failed to get file info", "path", filePath, "error", err)
+		return nil, fmt.Errorf("failed to get file info: %w", err)
+	}
+
+	info := &FileInfo{
+		Size:        stat.Size(),
+		Modified:    stat.ModTime(),
+		IsDirectory: stat.IsDir(),
+		IsFile:      stat.Mode().IsRegular(),
+		Permissions: fmt.Sprintf("%o", stat.Mode().Perm()),
+	}
+
+	// Get creation and access times (platform-specific)
+	if sys := ops.getSystemTimes(stat); sys != nil {
+		info.Created = sys.Created
+		info.Accessed = sys.Accessed
+	} else {
+		// Fallback to modification time
+		info.Created = stat.ModTime()
+		info.Accessed = stat.ModTime()
+	}
+
+	ops.logger.Debug("File info retrieved successfully", "path", filePath)
+	return info, nil
+}
