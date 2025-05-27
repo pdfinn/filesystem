@@ -423,6 +423,15 @@ func (ops *Operations) MoveFile(sourcePath, destPath string) error {
 
 	ops.logger.Debug("Moving file", "source", sourcePath, "destination", destPath)
 
+	// Check if destination already exists to avoid overwriting
+	if _, err := os.Stat(destPath); err == nil {
+		ops.logger.Warn("Destination already exists", "path", destPath)
+		return fmt.Errorf("destination already exists")
+	} else if !os.IsNotExist(err) {
+		ops.logger.Error("Failed to check destination", "path", destPath, "error", err)
+		return fmt.Errorf("failed to check destination: %w", err)
+	}
+
 	err := os.Rename(sourcePath, destPath)
 	if err != nil {
 		ops.logger.Error("Failed to move file", "source", sourcePath, "destination", destPath, "error", err)
