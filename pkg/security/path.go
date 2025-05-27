@@ -78,7 +78,6 @@ func (pv *PathValidator) ValidatePath(requestedPath string) (string, error) {
 	return realPath, nil
 }
 
-
 // isPathAllowed checks if a path is within any allowed directory
 func (pv *PathValidator) isPathAllowed(absolutePath string) bool {
 	normalizedPath := filepath.Clean(absolutePath)
