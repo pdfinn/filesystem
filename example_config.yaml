@@ -1,0 +1,30 @@
+# Example Secure Filesystem MCP Server Configuration
+# This shows different ways to configure directory access
+
+server:
+  name: "secure-filesystem-server"
+  version: "1.0.0"
+  transport: "stdio"
+
+# Security Configuration - Define allowed directories
+# The server will ONLY allow access to files within these directories
+allowed_directories:
+  # User's home directory (use full path for clarity)
+  - "/Users/username/Documents"
+  - "/Users/username/Desktop"
+  - "/Users/username/Projects"
+  
+  # System directories (be careful with these!)
+  - "/tmp"
+  - "/opt/data"
+  
+  # Relative paths (relative to where server is started)
+  - "./workspace"
+  - "../shared"
+  
+  # You can also use ~ for home directory in some cases
+  # - "~/Documents"  # This works but full paths are recommended
+
+# Logging Configuration
+# Available levels: debug, info, warn, error
+log_level: "info" 
