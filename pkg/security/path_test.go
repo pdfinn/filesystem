@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -97,5 +98,31 @@ func TestGetAllowedDirectories(t *testing.T) {
 	dirs[0] = "changed"
 	if pv.allowedDirectories[0] != base {
 		t.Fatalf("internal slice modified")
+	}
+}
+
+func TestIsPathUnderDirectoryRelativeUnix(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix-specific test")
+	}
+	pv := &PathValidator{}
+	if !pv.isPathUnderDirectory("a/b/c", "a/b") {
+		t.Fatalf("expected true for relative unix path")
+	}
+	if pv.isPathUnderDirectory("../outside", "a/b") {
+		t.Fatalf("expected false for path outside")
+	}
+}
+
+func TestIsPathUnderDirectoryRelativeWindows(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("windows-specific test")
+	}
+	pv := &PathValidator{}
+	if !pv.isPathUnderDirectory(`a\b\c`, `a\b`) {
+		t.Fatalf("expected true for windows path")
+	}
+	if pv.isPathUnderDirectory(`..\outside`, `a\b`) {
+		t.Fatalf("expected false for outside path")
 	}
 }
