@@ -22,7 +22,7 @@ func newTestHandlers(t *testing.T) (*ToolHandlers, string) {
 	base := t.TempDir()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	pv := security.NewPathValidator([]string{base}, logger)
-	ops := filesystem.NewOperations(logger)
+	ops := filesystem.NewOperations(pv, logger)
 	return NewToolHandlers(pv, ops, logger), base
 }
 
