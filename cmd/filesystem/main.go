@@ -7,16 +7,15 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"filesystem/internal/server"
 	"filesystem/pkg/config"
+	"filesystem/pkg/security"
 )
 
 const (
-	// maxStartupRetries limits startup retry attempts per Rule 2 (fixed loop bounds)
-	maxStartupRetries = 3
-
 	// exitCodeSuccess indicates successful termination
 	exitCodeSuccess = 0
 
@@ -131,18 +130,16 @@ func validateCommandLineDirectories(cfg *config.Config) error {
 	for i, dir := range cfg.AllowedDirectories {
 
 		// Expand home directory if needed
-		if dir == "~" || (len(dir) > 1 && dir[:2] == "~/") {
-			homeDir, err := os.UserHomeDir()
-			if err != nil {
-				return fmt.Errorf("failed to get home directory: %w", err)
-			}
-			if dir == "~" {
-				dir = homeDir
-			} else {
-				dir = homeDir + dir[1:]
-			}
-			cfg.AllowedDirectories[i] = dir
+		dir = security.ExpandHomePath(dir)
+
+		// Convert to absolute path
+		absDir, err := filepath.Abs(dir)
+		if err != nil {
+			return fmt.Errorf("failed to get absolute path for %s: %w", dir, err)
 		}
+
+		cfg.AllowedDirectories[i] = absDir
+		dir = absDir
 
 		// Check if directory exists and is accessible
 		info, err := os.Stat(dir)
@@ -194,6 +191,6 @@ func initializeLogger(level string) *slog.Logger {
 		Level: logLevel,
 	}
 
-	handler := slog.NewJSONHandler(os.Stdout, opts)
+	handler := slog.NewJSONHandler(os.Stderr, opts)
 	return slog.New(handler)
 }

@@ -17,4 +17,4 @@ allowed_directories:
 
 # Logging Configuration
 # Available levels: debug, info, warn, error
-log_level: "info" 
+log_level: "info"

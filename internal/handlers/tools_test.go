@@ -22,7 +22,7 @@ func newTestHandlers(t *testing.T) (*ToolHandlers, string) {
 	base := t.TempDir()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	pv := security.NewPathValidator([]string{base}, logger)
-	ops := filesystem.NewOperations(logger)
+	ops := filesystem.NewOperations(pv, logger)
 	return NewToolHandlers(pv, ops, logger), base
 }
 
@@ -132,6 +132,33 @@ func TestHandleMoveAndSearchFile(t *testing.T) {
 	}
 }
 
+func TestHandleMoveFileDestinationExists(t *testing.T) {
+	th, base := newTestHandlers(t)
+	ctx := context.Background()
+	src := filepath.Join(base, "src2.txt")
+	if err := os.WriteFile(src, []byte("z"), 0644); err != nil {
+		t.Fatalf("prep src: %v", err)
+	}
+	dst := filepath.Join(base, "dst2.txt")
+	if err := os.WriteFile(dst, []byte("existing"), 0644); err != nil {
+		t.Fatalf("prep dst: %v", err)
+	}
+
+	moveReq := newRequest(map[string]interface{}{"source": src, "destination": dst})
+	if _, err := th.handleMoveFile(ctx, moveReq); err == nil {
+		t.Fatalf("expected error for existing destination")
+	}
+
+	if _, err := os.Stat(src); err != nil {
+		t.Fatalf("source missing after failed move: %v", err)
+	}
+
+	data, err := os.ReadFile(dst)
+	if err != nil || string(data) != "existing" {
+		t.Fatalf("destination modified: %s %v", string(data), err)
+	}
+}
+
 func TestHandleGetFileInfo(t *testing.T) {
 	th, base := newTestHandlers(t)
 	ctx := context.Background()
@@ -161,5 +188,37 @@ func TestHandleInvalidPath(t *testing.T) {
 	req := newRequest(map[string]interface{}{"path": outside})
 	if _, err := th.handleReadFile(ctx, req); err == nil {
 		t.Fatalf("expected error for invalid path")
+	}
+}
+
+func TestHandleReadMultipleFilesInvalid(t *testing.T) {
+	th, base := newTestHandlers(t)
+	ctx := context.Background()
+
+	valid := filepath.Join(base, "a.txt")
+	if err := os.WriteFile(valid, []byte("data"), 0644); err != nil {
+		t.Fatalf("prep valid: %v", err)
+	}
+
+	invalid := filepath.Join(os.TempDir(), "outside.txt")
+
+	req := newRequest(map[string]interface{}{"paths": []interface{}{valid, invalid}})
+	res, err := th.handleReadMultipleFiles(ctx, req)
+	if err != nil {
+		t.Fatalf("mixed read error: %v", err)
+	}
+	b, _ := json.Marshal(res)
+	if strings.Contains(string(b), invalid) {
+		t.Fatalf("response should not include invalid path")
+	}
+
+	badReq := newRequest(map[string]interface{}{"paths": []interface{}{invalid}})
+	badRes, err := th.handleReadMultipleFiles(ctx, badReq)
+	if err != nil {
+		t.Fatalf("invalid read error: %v", err)
+	}
+	bb, _ := json.Marshal(badRes)
+	if !strings.Contains(string(bb), "No valid paths") {
+		t.Fatalf("expected no valid paths error")
 	}
 }

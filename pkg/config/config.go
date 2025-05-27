@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 
 	"gopkg.in/yaml.v3"
+
+	"filesystem/pkg/security"
 )
 
 // Config holds the application configuration
@@ -111,17 +113,7 @@ func normalizeDirectories(cfg *Config) error {
 	for _, dir := range cfg.AllowedDirectories {
 
 		// Expand home directory if needed
-		if dir == "~" || len(dir) > 1 && dir[:2] == "~/" {
-			homeDir, err := os.UserHomeDir()
-			if err != nil {
-				return fmt.Errorf("failed to get home directory: %w", err)
-			}
-			if dir == "~" {
-				dir = homeDir
-			} else {
-				dir = filepath.Join(homeDir, dir[2:])
-			}
-		}
+		dir = security.ExpandHomePath(dir)
 
 		// Convert to absolute path
 		absDir, err := filepath.Abs(dir)
