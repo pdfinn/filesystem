@@ -32,3 +32,39 @@ func TestValidateCommandLineDirectoriesDot(t *testing.T) {
 		t.Fatalf("expected %s got %v", expect, cfg.AllowedDirectories)
 	}
 }
+
+func TestValidateCommandLineDirectoriesNonexistent(t *testing.T) {
+	base := t.TempDir()
+	missing := filepath.Join(base, "no_such")
+
+	cfg := config.Default()
+	cfg.AllowedDirectories = []string{missing}
+
+	if err := validateCommandLineDirectories(cfg); err == nil {
+		t.Fatalf("expected error for nonexistent directory")
+	}
+}
+
+func TestValidateCommandLineDirectoriesFile(t *testing.T) {
+	base := t.TempDir()
+	file := filepath.Join(base, "file.txt")
+	if err := os.WriteFile(file, []byte("x"), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	cfg := config.Default()
+	cfg.AllowedDirectories = []string{file}
+
+	if err := validateCommandLineDirectories(cfg); err == nil {
+		t.Fatalf("expected error for non-directory path")
+	}
+}
+
+func TestValidateCommandLineDirectoriesEmpty(t *testing.T) {
+	cfg := config.Default()
+	cfg.AllowedDirectories = []string{}
+
+	if err := validateCommandLineDirectories(cfg); err == nil {
+		t.Fatalf("expected error for empty slice")
+	}
+}
