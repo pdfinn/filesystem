@@ -78,7 +78,6 @@ func (pv *PathValidator) ValidatePath(requestedPath string) (string, error) {
 	return realPath, nil
 }
 
-
 // isPathAllowed checks if a path is within any allowed directory
 func (pv *PathValidator) isPathAllowed(absolutePath string) bool {
 	normalizedPath := filepath.Clean(absolutePath)
@@ -97,15 +96,11 @@ func (pv *PathValidator) isPathAllowed(absolutePath string) bool {
 
 // isPathUnderDirectory checks if a path is under a given directory
 func (pv *PathValidator) isPathUnderDirectory(path, dir string) bool {
-	// Ensure both paths end with separator for proper comparison
-	if !strings.HasSuffix(dir, string(filepath.Separator)) {
-		dir += string(filepath.Separator)
+	rel, err := filepath.Rel(dir, path)
+	if err == nil && !strings.HasPrefix(rel, "..") {
+		return true
 	}
-	if !strings.HasSuffix(path, string(filepath.Separator)) {
-		path += string(filepath.Separator)
-	}
-
-	return strings.HasPrefix(path, dir)
+	return false
 }
 
 // validateRealPath handles symlinks and validates the real path
