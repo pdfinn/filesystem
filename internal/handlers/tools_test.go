@@ -190,3 +190,35 @@ func TestHandleInvalidPath(t *testing.T) {
 		t.Fatalf("expected error for invalid path")
 	}
 }
+
+func TestHandleReadMultipleFilesInvalid(t *testing.T) {
+	th, base := newTestHandlers(t)
+	ctx := context.Background()
+
+	valid := filepath.Join(base, "a.txt")
+	if err := os.WriteFile(valid, []byte("data"), 0644); err != nil {
+		t.Fatalf("prep valid: %v", err)
+	}
+
+	invalid := filepath.Join(os.TempDir(), "outside.txt")
+
+	req := newRequest(map[string]interface{}{"paths": []interface{}{valid, invalid}})
+	res, err := th.handleReadMultipleFiles(ctx, req)
+	if err != nil {
+		t.Fatalf("mixed read error: %v", err)
+	}
+	b, _ := json.Marshal(res)
+	if strings.Contains(string(b), invalid) {
+		t.Fatalf("response should not include invalid path")
+	}
+
+	badReq := newRequest(map[string]interface{}{"paths": []interface{}{invalid}})
+	badRes, err := th.handleReadMultipleFiles(ctx, badReq)
+	if err != nil {
+		t.Fatalf("invalid read error: %v", err)
+	}
+	bb, _ := json.Marshal(badRes)
+	if !strings.Contains(string(bb), "No valid paths") {
+		t.Fatalf("expected no valid paths error")
+	}
+}
