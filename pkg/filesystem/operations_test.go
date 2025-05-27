@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"filesystem/pkg/security"
@@ -94,5 +95,86 @@ func TestReadFileExceedsLimit(t *testing.T) {
 
 	if _, err := ops.ReadFile(p); err == nil {
 		t.Fatalf("expected error for oversized file")
+	}
+}
+
+func TestSearchFilesExcludePatterns(t *testing.T) {
+	ops, base := newOps(t)
+
+	dir1 := filepath.Join(base, "dir1")
+	dir2 := filepath.Join(base, "dir2")
+	excl := filepath.Join(base, "exclude")
+
+	if err := os.MkdirAll(dir1, 0755); err != nil {
+		t.Fatalf("mkdir dir1: %v", err)
+	}
+	if err := os.MkdirAll(dir2, 0755); err != nil {
+		t.Fatalf("mkdir dir2: %v", err)
+	}
+	if err := os.MkdirAll(excl, 0755); err != nil {
+		t.Fatalf("mkdir exclude: %v", err)
+	}
+
+	files := []string{
+		filepath.Join(base, "foo.txt"),
+		filepath.Join(dir1, "foo.txt"),
+		filepath.Join(dir2, "foo.txt"),
+		filepath.Join(excl, "foo.txt"),
+	}
+	for _, f := range files {
+		if err := os.WriteFile(f, []byte("x"), 0644); err != nil {
+			t.Fatalf("write %s: %v", f, err)
+		}
+	}
+
+	res, err := ops.SearchFiles(base, "foo", []string{"exclude"})
+	if err != nil {
+		t.Fatalf("search error: %v", err)
+	}
+
+	got := map[string]bool{}
+	for _, p := range res {
+		got[filepath.Clean(p)] = true
+	}
+
+	expect := []string{
+		filepath.Join(base, "foo.txt"),
+		filepath.Join(dir1, "foo.txt"),
+		filepath.Join(dir2, "foo.txt"),
+	}
+	for _, p := range expect {
+		if !got[filepath.Clean(p)] {
+			t.Fatalf("missing expected path %s", p)
+		}
+	}
+	excluded := filepath.Join(excl, "foo.txt")
+	if got[filepath.Clean(excluded)] {
+		t.Fatalf("excluded file returned: %s", excluded)
+	}
+}
+
+func TestEditFileDryRun(t *testing.T) {
+	ops, base := newOps(t)
+	p := filepath.Join(base, "file.txt")
+	original := "hello world"
+	if err := os.WriteFile(p, []byte(original), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	edits := []EditOperation{{OldText: "hello", NewText: "hi"}}
+	diff, err := ops.EditFile(p, edits, true)
+	if err != nil {
+		t.Fatalf("edit: %v", err)
+	}
+	if !strings.Contains(diff, "+hi") {
+		t.Fatalf("diff does not contain change: %s", diff)
+	}
+
+	data, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	if string(data) != original {
+		t.Fatalf("file modified on dry run")
 	}
 }
