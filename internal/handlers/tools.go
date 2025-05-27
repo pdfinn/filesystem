@@ -219,17 +219,17 @@ func (th *ToolHandlers) handleReadMultipleFiles(ctx context.Context, req mcp.Cal
 	if errRes != nil {
 		return errRes, nil
 	}
-	// Validate each path
+	// Validate each path and only keep valid ones
 	paths := make([]string, 0, len(pathsSlice))
 	for i := 0; i < len(pathsSlice) && i < 100; i++ {
 		path := pathsSlice[i]
 		validPath, err := th.pathValidator.ValidatePath(path)
 		if err != nil {
+			// Skip invalid paths but log the failure
 			th.logger.Warn("Path validation failed", "path", path, "error", err)
-			paths = append(paths, path)
-		} else {
-			paths = append(paths, validPath)
+			continue
 		}
+		paths = append(paths, validPath)
 	}
 
 	if len(paths) == 0 {
