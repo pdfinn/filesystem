@@ -261,7 +261,7 @@ func TestMoveFileCrossDevice(t *testing.T) {
 	}
 }
 
-func TestDirectoryTreeInvalidPath(t *testing.T) {
+func TestDirectoryTreeNonExistentPath(t *testing.T) {
 	ops, base := newOps(t)
 	invalid := filepath.Join(base, "no_such_dir")
 	if _, err := ops.DirectoryTree(invalid); err == nil {
@@ -270,11 +270,8 @@ func TestDirectoryTreeInvalidPath(t *testing.T) {
 }
 
 func TestDirectoryTreeUnauthorizedPath(t *testing.T) {
-	ops, base := newOps(t)
+	ops, _ := newOps(t)
 	outside := filepath.Join(os.TempDir(), "outside")
-	if err := os.MkdirAll(outside, 0755); err != nil {
-		t.Fatalf("mkdir outside: %v", err)
-	}
 	if _, err := ops.DirectoryTree(outside); err == nil {
 		t.Fatalf("expected error for unauthorized path")
 	}
