@@ -63,9 +63,11 @@ func TestHandleWriteReadEditFile(t *testing.T) {
 	}
 
 	// edit file
-	edits := []map[string]interface{}{{"oldText": "hello", "newText": "bye"}}
-	editReq := newRequest(map[string]interface{}{"path": p, "edits": edits})
-	if _, err := th.handleEditFile(ctx, editReq); err != nil {
+	edits := []interface{}{map[string]interface{}{"oldText": "hello", "newText": "bye"}}
+	editArgs := map[string]interface{}{"path": p, "edits": edits, "dryRun": false}
+	editReq := newRequest(editArgs)
+	_, err = th.handleEditFile(ctx, editReq)
+	if err != nil {
 		t.Fatalf("edit error: %v", err)
 	}
 
@@ -145,8 +147,12 @@ func TestHandleMoveFileDestinationExists(t *testing.T) {
 	}
 
 	moveReq := newRequest(map[string]interface{}{"source": src, "destination": dst})
-	if _, err := th.handleMoveFile(ctx, moveReq); err == nil {
-		t.Fatalf("expected error for existing destination")
+	result, err := th.handleMoveFile(ctx, moveReq)
+	if err != nil {
+		t.Fatalf("unexpected Go error: %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("expected MCP error result for existing destination")
 	}
 
 	if _, err := os.Stat(src); err != nil {
@@ -183,7 +189,14 @@ func TestHandleGetFileInfo(t *testing.T) {
 func TestHandleInvalidPath(t *testing.T) {
 	th, _ := newTestHandlers(t)
 	ctx := context.Background()
-	outside := filepath.Join(os.TempDir(), "outside.txt")
+
+	// Create a temporary file outside the allowed directory
+	tmpDir := os.TempDir()
+	outside := filepath.Join(tmpDir, "outside.txt")
+	if err := os.WriteFile(outside, []byte("test"), 0644); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+	defer os.Remove(outside)
 
 	req := newRequest(map[string]interface{}{"path": outside})
 	if _, err := th.handleReadFile(ctx, req); err == nil {
