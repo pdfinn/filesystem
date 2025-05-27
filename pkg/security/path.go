@@ -19,10 +19,22 @@ func NewPathValidator(allowedDirs []string, logger *slog.Logger) *PathValidator 
 	// Pre-allocate with known size per Rule 3 (no dynamic allocation after init)
 	normalizedDirs := make([]string, 0, len(allowedDirs))
 
-	// Normalize all allowed directories
+	// Normalize all allowed directories and resolve symlinks
 	for _, d := range allowedDirs {
 		dir := filepath.Clean(d)
-		normalizedDirs = append(normalizedDirs, dir)
+		// Try to resolve symlinks for allowed directories too
+		realDir, err := filepath.EvalSymlinks(dir)
+		if err != nil {
+			// If symlink resolution fails, use cleaned path
+			logger.Debug("Cannot resolve symlinks for allowed directory, using original", "dir", dir, "error", err)
+			normalizedDirs = append(normalizedDirs, dir)
+		} else {
+			// Use both the original and real path for better compatibility
+			normalizedDirs = append(normalizedDirs, dir)
+			if realDir != dir {
+				normalizedDirs = append(normalizedDirs, realDir)
+			}
+		}
 	}
 
 	return &PathValidator{
