@@ -128,6 +128,39 @@ func TestReadFileExceedsLimit(t *testing.T) {
 	}
 }
 
+func TestWriteFileWithinLimit(t *testing.T) {
+	ops, base := newOps(t)
+	p := filepath.Join(base, "out.txt")
+	content := bytes.Repeat([]byte("c"), int(maxWriteSize))
+
+	if err := ops.WriteFile(p, string(content)); err != nil {
+		t.Fatalf("write failed: %v", err)
+	}
+
+	data, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	if !bytes.Equal(data, content) {
+		t.Fatalf("content mismatch")
+	}
+}
+
+func TestWriteFileExceedsLimit(t *testing.T) {
+	ops, base := newOps(t)
+	p := filepath.Join(base, "too_big.txt")
+	content := bytes.Repeat([]byte("d"), int(maxWriteSize)+1)
+
+	if err := ops.WriteFile(p, string(content)); err == nil {
+		t.Fatalf("expected error for oversized content")
+	}
+	if _, err := os.Stat(p); err == nil {
+		t.Fatalf("file should not have been created")
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("unexpected stat error: %v", err)
+	}
+}
+
 func TestSearchFilesExcludePatterns(t *testing.T) {
 	ops, base := newOps(t)
 
