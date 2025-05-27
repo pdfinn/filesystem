@@ -41,7 +41,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 
 	// Create security components
 	pathValidator := security.NewPathValidator(cfg.AllowedDirectories, logger)
-	fsOps := filesystem.NewOperations(logger)
+	fsOps := filesystem.NewOperations(pathValidator, logger)
 
 	// Create MCP server with capabilities
 	mcpServer := server.NewMCPServer(

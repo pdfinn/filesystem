@@ -13,6 +13,8 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/sergi/go-diff/diffmatchpatch"
+
+	"filesystem/pkg/security"
 )
 
 // FileInfo represents detailed file information
@@ -41,13 +43,15 @@ type EditOperation struct {
 
 // Operations provides secure filesystem operations
 type Operations struct {
-	logger *slog.Logger
+	logger        *slog.Logger
+	pathValidator *security.PathValidator
 }
 
 // NewOperations creates a new filesystem operations instance
-func NewOperations(logger *slog.Logger) *Operations {
+func NewOperations(validator *security.PathValidator, logger *slog.Logger) *Operations {
 	return &Operations{
-		logger: logger,
+		logger:        logger,
+		pathValidator: validator,
 	}
 }
 
@@ -373,7 +377,13 @@ func (ops *Operations) buildTree(dirPath string, visited map[string]bool) ([]Tre
 
 			// Recursively build subtree
 			subPath := filepath.Join(dirPath, entry.Name())
-			children, err := ops.buildTree(subPath, visited)
+			validPath, err := ops.pathValidator.ValidatePath(subPath)
+			if err != nil {
+				ops.logger.Warn("Path validation failed", "path", subPath, "error", err)
+				// Skip this directory if validation fails
+				continue
+			}
+			children, err := ops.buildTree(validPath)
 			if err != nil {
 				ops.logger.Warn("Failed to build subtree", "path", subPath, "error", err)
 				// Continue with empty children rather than failing
@@ -429,6 +439,15 @@ func (ops *Operations) SearchFiles(rootPath, pattern string, excludePatterns []s
 		if err != nil {
 			ops.logger.Warn("Error walking directory", "path", path, "error", err)
 			return nil // Continue walking
+		}
+
+		// Validate each path before processing to ensure we stay within allowed directories
+		if _, valErr := ops.pathValidator.ValidatePath(path); valErr != nil {
+			ops.logger.Warn("Path validation failed", "path", path, "error", valErr)
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 
 		// Check exclude patterns
