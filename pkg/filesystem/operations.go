@@ -22,8 +22,8 @@ import (
 
 const maxReadSize int64 = 1 * 1024 * 1024 // 1MB
 
-// rename is a wrapper around os.Rename so it can be overridden in tests
-var rename = os.Rename
+// maxTreeDepth defines the maximum depth DirectoryTree will recurse
+const maxTreeDepth int = 20
 
 // FileInfo represents detailed file information
 type FileInfo struct {
@@ -336,12 +336,24 @@ func (ops *Operations) DirectoryTree(dirPath string) (string, error) {
 		return "", fmt.Errorf("directory path cannot be empty")
 	}
 
-	ops.logger.Debug("Building directory tree", "path", dirPath)
+	// Validate the provided path
+	validPath, err := ops.pathValidator.ValidatePath(dirPath)
+	if err != nil {
+		return "", err
+	}
+
+	ops.logger.Debug("Building directory tree", "path", validPath)
+
+	// Validate root directory is within allowed paths
+	validPath, err := ops.pathValidator.ValidatePath(dirPath)
+	if err != nil {
+		return "", err
+	}
 
 	// Track visited real paths to avoid infinite recursion
 	visited := make(map[string]bool)
 
-	tree, err := ops.buildTree(dirPath, visited)
+	tree, err := ops.buildTree(validPath, visited)
 	if err != nil {
 		return "", err
 	}
@@ -358,7 +370,10 @@ func (ops *Operations) DirectoryTree(dirPath string) (string, error) {
 }
 
 // buildTree recursively builds a tree structure
-func (ops *Operations) buildTree(dirPath string, visited map[string]bool) ([]TreeEntry, error) {
+func (ops *Operations) buildTree(dirPath string, visited map[string]bool, depth int) ([]TreeEntry, error) {
+	if depth > maxTreeDepth {
+		return nil, fmt.Errorf("maximum directory depth exceeded")
+	}
 	realPath, err := filepath.EvalSymlinks(dirPath)
 	if err != nil {
 		// If symlink resolution fails, fall back to cleaned path
@@ -402,7 +417,7 @@ func (ops *Operations) buildTree(dirPath string, visited map[string]bool) ([]Tre
 				// Skip this directory if validation fails
 				continue
 			}
-			children, err := ops.buildTree(validPath, visited)
+			children, err := ops.buildTree(validPath, visited, depth+1)
 			if err != nil {
 				ops.logger.Warn("Failed to build subtree", "path", subPath, "error", err)
 				// Continue with empty children rather than failing
