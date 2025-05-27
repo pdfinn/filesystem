@@ -28,7 +28,16 @@ func newTestHandlers(t *testing.T) (*ToolHandlers, string) {
 
 // helper to build a call request
 func newRequest(args map[string]interface{}) mcp.CallToolRequest {
-	return mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: args}}
+	return mcp.CallToolRequest{
+		Params: struct {
+			Name      string    `json:"name"`
+			Arguments any       `json:"arguments,omitempty"`
+			Meta      *mcp.Meta `json:"_meta,omitempty"`
+		}{
+			Name:      "test_tool",
+			Arguments: args,
+		},
+	}
 }
 
 func TestHandleWriteReadEditFile(t *testing.T) {
