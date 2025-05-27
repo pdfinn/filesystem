@@ -183,15 +183,14 @@ func (th *ToolHandlers) createListAllowedDirectoriesTool() mcp.Tool {
 // Tool handler methods
 
 func (th *ToolHandlers) handleReadFile(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// Parse arguments with validation per Rule 7
-	args, ok := req.Params.Arguments.(map[string]any)
-	if !ok || args == nil {
-		return mcp.NewToolResultError("Invalid arguments format"), nil
+	args, errRes := getArguments(req)
+	if errRes != nil {
+		return errRes, nil
 	}
 
-	path, ok := args["path"].(string)
-	if !ok || path == "" {
-		return mcp.NewToolResultError("Path parameter is required"), nil
+	path, errRes := getRequiredString(args, "path")
+	if errRes != nil {
+		return errRes, nil
 	}
 
 	// Validate path security
@@ -211,29 +210,25 @@ func (th *ToolHandlers) handleReadFile(ctx context.Context, req mcp.CallToolRequ
 }
 
 func (th *ToolHandlers) handleReadMultipleFiles(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// Parse arguments with validation per Rule 7
-	args, ok := req.Params.Arguments.(map[string]any)
-	if !ok || args == nil {
-		return mcp.NewToolResultError("Invalid arguments format"), nil
+	args, errRes := getArguments(req)
+	if errRes != nil {
+		return errRes, nil
 	}
 
-	pathsInterface, ok := args["paths"].([]interface{})
-	if !ok {
-		return mcp.NewToolResultError("Paths parameter is required"), nil
+	pathsSlice, errRes := getRequiredStringSlice(args, "paths")
+	if errRes != nil {
+		return errRes, nil
 	}
-
-	// Convert to string slice
-	paths := make([]string, 0, len(pathsInterface))
-	for _, p := range pathsInterface {
-		if path, ok := p.(string); ok && path != "" {
-			// Validate each path
-			validPath, err := th.pathValidator.ValidatePath(path)
-			if err != nil {
-				th.logger.Warn("Path validation failed", "path", path, "error", err)
-				paths = append(paths, path) // Include invalid path for error reporting
-			} else {
-				paths = append(paths, validPath)
-			}
+	// Validate each path
+	paths := make([]string, 0, len(pathsSlice))
+	for i := 0; i < len(pathsSlice) && i < 100; i++ {
+		path := pathsSlice[i]
+		validPath, err := th.pathValidator.ValidatePath(path)
+		if err != nil {
+			th.logger.Warn("Path validation failed", "path", path, "error", err)
+			paths = append(paths, path)
+		} else {
+			paths = append(paths, validPath)
 		}
 	}
 
@@ -251,20 +246,19 @@ func (th *ToolHandlers) handleReadMultipleFiles(ctx context.Context, req mcp.Cal
 }
 
 func (th *ToolHandlers) handleWriteFile(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// Parse arguments with validation per Rule 7
-	args, ok := req.Params.Arguments.(map[string]any)
-	if !ok || args == nil {
-		return mcp.NewToolResultError("Invalid arguments format"), nil
+	args, errRes := getArguments(req)
+	if errRes != nil {
+		return errRes, nil
 	}
 
-	path, ok := args["path"].(string)
-	if !ok || path == "" {
-		return mcp.NewToolResultError("Path parameter is required"), nil
+	path, errRes := getRequiredString(args, "path")
+	if errRes != nil {
+		return errRes, nil
 	}
 
-	content, ok := args["content"].(string)
-	if !ok {
-		return mcp.NewToolResultError("Content parameter is required"), nil
+	content, errRes := getRequiredString(args, "content")
+	if errRes != nil {
+		return errRes, nil
 	}
 
 	// Validate path security
@@ -284,50 +278,22 @@ func (th *ToolHandlers) handleWriteFile(ctx context.Context, req mcp.CallToolReq
 }
 
 func (th *ToolHandlers) handleEditFile(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// Parse arguments with validation per Rule 7
-	args, ok := req.Params.Arguments.(map[string]any)
-	if !ok || args == nil {
-		return mcp.NewToolResultError("Invalid arguments format"), nil
+	args, errRes := getArguments(req)
+	if errRes != nil {
+		return errRes, nil
 	}
 
-	path, ok := args["path"].(string)
-	if !ok || path == "" {
-		return mcp.NewToolResultError("Path parameter is required"), nil
+	path, errRes := getRequiredString(args, "path")
+	if errRes != nil {
+		return errRes, nil
 	}
 
-	editsInterface, ok := args["edits"].([]interface{})
-	if !ok {
-		return mcp.NewToolResultError("Edits parameter is required"), nil
+	edits, errRes := getEditOperations(args)
+	if errRes != nil {
+		return errRes, nil
 	}
 
-	dryRun := false
-	if dryRunVal, exists := args["dryRun"]; exists {
-		if dr, ok := dryRunVal.(bool); ok {
-			dryRun = dr
-		}
-	}
-
-	// Parse edits
-	edits := make([]filesystem.EditOperation, 0, len(editsInterface))
-	for _, e := range editsInterface {
-		editMap, ok := e.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		oldText, ok1 := editMap["oldText"].(string)
-		newText, ok2 := editMap["newText"].(string)
-		if ok1 && ok2 {
-			edits = append(edits, filesystem.EditOperation{
-				OldText: oldText,
-				NewText: newText,
-			})
-		}
-	}
-
-	if len(edits) == 0 {
-		return mcp.NewToolResultError("No valid edits provided"), nil
-	}
+	dryRun := getOptionalBool(args, "dryRun", false)
 
 	// Validate path security
 	validPath, err := th.pathValidator.ValidatePath(path)
@@ -346,15 +312,14 @@ func (th *ToolHandlers) handleEditFile(ctx context.Context, req mcp.CallToolRequ
 }
 
 func (th *ToolHandlers) handleCreateDirectory(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// Parse arguments with validation per Rule 7
-	args, ok := req.Params.Arguments.(map[string]any)
-	if !ok || args == nil {
-		return mcp.NewToolResultError("Invalid arguments format"), nil
+	args, errRes := getArguments(req)
+	if errRes != nil {
+		return errRes, nil
 	}
 
-	path, ok := args["path"].(string)
-	if !ok || path == "" {
-		return mcp.NewToolResultError("Path parameter is required"), nil
+	path, errRes := getRequiredString(args, "path")
+	if errRes != nil {
+		return errRes, nil
 	}
 
 	// Validate path security
@@ -374,15 +339,14 @@ func (th *ToolHandlers) handleCreateDirectory(ctx context.Context, req mcp.CallT
 }
 
 func (th *ToolHandlers) handleListDirectory(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// Parse arguments with validation per Rule 7
-	args, ok := req.Params.Arguments.(map[string]any)
-	if !ok || args == nil {
-		return mcp.NewToolResultError("Invalid arguments format"), nil
+	args, errRes := getArguments(req)
+	if errRes != nil {
+		return errRes, nil
 	}
 
-	path, ok := args["path"].(string)
-	if !ok || path == "" {
-		return mcp.NewToolResultError("Path parameter is required"), nil
+	path, errRes := getRequiredString(args, "path")
+	if errRes != nil {
+		return errRes, nil
 	}
 
 	// Validate path security
@@ -402,15 +366,14 @@ func (th *ToolHandlers) handleListDirectory(ctx context.Context, req mcp.CallToo
 }
 
 func (th *ToolHandlers) handleDirectoryTree(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// Parse arguments with validation per Rule 7
-	args, ok := req.Params.Arguments.(map[string]any)
-	if !ok || args == nil {
-		return mcp.NewToolResultError("Invalid arguments format"), nil
+	args, errRes := getArguments(req)
+	if errRes != nil {
+		return errRes, nil
 	}
 
-	path, ok := args["path"].(string)
-	if !ok || path == "" {
-		return mcp.NewToolResultError("Path parameter is required"), nil
+	path, errRes := getRequiredString(args, "path")
+	if errRes != nil {
+		return errRes, nil
 	}
 
 	// Validate path security
@@ -430,20 +393,19 @@ func (th *ToolHandlers) handleDirectoryTree(ctx context.Context, req mcp.CallToo
 }
 
 func (th *ToolHandlers) handleMoveFile(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// Parse arguments with validation per Rule 7
-	args, ok := req.Params.Arguments.(map[string]any)
-	if !ok || args == nil {
-		return mcp.NewToolResultError("Invalid arguments format"), nil
+	args, errRes := getArguments(req)
+	if errRes != nil {
+		return errRes, nil
 	}
 
-	source, ok := args["source"].(string)
-	if !ok || source == "" {
-		return mcp.NewToolResultError("Source parameter is required"), nil
+	source, errRes := getRequiredString(args, "source")
+	if errRes != nil {
+		return errRes, nil
 	}
 
-	destination, ok := args["destination"].(string)
-	if !ok || destination == "" {
-		return mcp.NewToolResultError("Destination parameter is required"), nil
+	destination, errRes := getRequiredString(args, "destination")
+	if errRes != nil {
+		return errRes, nil
 	}
 
 	// Validate both paths
@@ -469,34 +431,23 @@ func (th *ToolHandlers) handleMoveFile(ctx context.Context, req mcp.CallToolRequ
 }
 
 func (th *ToolHandlers) handleSearchFiles(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// Parse arguments with validation per Rule 7
-	args, ok := req.Params.Arguments.(map[string]any)
-	if !ok || args == nil {
-		return mcp.NewToolResultError("Invalid arguments format"), nil
+	args, errRes := getArguments(req)
+	if errRes != nil {
+		return errRes, nil
 	}
 
-	path, ok := args["path"].(string)
-	if !ok || path == "" {
-		return mcp.NewToolResultError("Path parameter is required"), nil
+	path, errRes := getRequiredString(args, "path")
+	if errRes != nil {
+		return errRes, nil
 	}
 
-	pattern, ok := args["pattern"].(string)
-	if !ok || pattern == "" {
-		return mcp.NewToolResultError("Pattern parameter is required"), nil
+	pattern, errRes := getRequiredString(args, "pattern")
+	if errRes != nil {
+		return errRes, nil
 	}
 
 	// Parse exclude patterns
-	var excludePatterns []string
-	if excludeInterface, exists := args["excludePatterns"]; exists {
-		if excludeArray, ok := excludeInterface.([]interface{}); ok {
-			excludePatterns = make([]string, 0, len(excludeArray))
-			for _, ex := range excludeArray {
-				if exclude, ok := ex.(string); ok {
-					excludePatterns = append(excludePatterns, exclude)
-				}
-			}
-		}
-	}
+	excludePatterns := getOptionalStringSlice(args, "excludePatterns")
 
 	// Validate path security
 	validPath, err := th.pathValidator.ValidatePath(path)
@@ -519,15 +470,15 @@ func (th *ToolHandlers) handleSearchFiles(ctx context.Context, req mcp.CallToolR
 }
 
 func (th *ToolHandlers) handleGetFileInfo(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// Parse arguments with validation per Rule 7
-	args, ok := req.Params.Arguments.(map[string]any)
-	if !ok || args == nil {
-		return mcp.NewToolResultError("Invalid arguments format"), nil
+	args, errRes := getArguments(req)
+	if errRes != nil {
+		return errRes, nil
+
 	}
 
-	path, ok := args["path"].(string)
-	if !ok || path == "" {
-		return mcp.NewToolResultError("Path parameter is required"), nil
+	path, errRes := getRequiredString(args, "path")
+	if errRes != nil {
+		return errRes, nil
 	}
 
 	// Validate path security
