@@ -474,6 +474,7 @@ func (th *ToolHandlers) handleGetFileInfo(ctx context.Context, req mcp.CallToolR
 	args, errRes := getArguments(req)
 	if errRes != nil {
 		return errRes, nil
+
 	}
 
 	path, errRes := getRequiredString(args, "path")
