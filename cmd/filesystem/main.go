@@ -191,6 +191,6 @@ func initializeLogger(level string) *slog.Logger {
 		Level: logLevel,
 	}
 
-	handler := slog.NewJSONHandler(os.Stdout, opts)
+	handler := slog.NewJSONHandler(os.Stderr, opts)
 	return slog.New(handler)
 }
