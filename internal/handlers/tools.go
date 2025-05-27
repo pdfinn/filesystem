@@ -2,10 +2,10 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"filesystem/pkg/filesystem"
 	"filesystem/pkg/security"
@@ -543,13 +543,19 @@ func (th *ToolHandlers) handleGetFileInfo(ctx context.Context, req mcp.CallToolR
 		return mcp.NewToolResultError(fmt.Sprintf("Error: %s", err.Error())), nil
 	}
 
-	// Format info as JSON
-	infoJSON, err := json.MarshalIndent(info, "", "  ")
-	if err != nil {
-		return mcp.NewToolResultError("Failed to format file info"), nil
+	// Format info as newline separated key/value pairs to match the
+	// TypeScript implementation
+	formatted := []string{
+		fmt.Sprintf("size: %d", info.Size),
+		fmt.Sprintf("created: %s", info.Created.Format(time.RFC3339)),
+		fmt.Sprintf("modified: %s", info.Modified.Format(time.RFC3339)),
+		fmt.Sprintf("accessed: %s", info.Accessed.Format(time.RFC3339)),
+		fmt.Sprintf("isDirectory: %t", info.IsDirectory),
+		fmt.Sprintf("isFile: %t", info.IsFile),
+		fmt.Sprintf("permissions: %s", info.Permissions),
 	}
 
-	return mcp.NewToolResultText(string(infoJSON)), nil
+	return mcp.NewToolResultText(strings.Join(formatted, "\n")), nil
 }
 
 func (th *ToolHandlers) handleListAllowedDirectories(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
