@@ -17,6 +17,8 @@ import (
 	"filesystem/pkg/security"
 )
 
+const maxReadSize int64 = 1 * 1024 * 1024 // 1MB
+
 // FileInfo represents detailed file information
 type FileInfo struct {
 	Size        int64     `json:"size"`
@@ -63,6 +65,17 @@ func (ops *Operations) ReadFile(filePath string) (string, error) {
 	}
 
 	ops.logger.Debug("Reading file", "path", filePath)
+
+	info, err := os.Stat(filePath)
+	if err != nil {
+		ops.logger.Error("Failed to stat file", "path", filePath, "error", err)
+		return "", fmt.Errorf("failed to stat file: %w", err)
+	}
+
+	if info.Size() > maxReadSize {
+		ops.logger.Warn("File size exceeds limit", "path", filePath, "size", info.Size())
+		return "", fmt.Errorf("file exceeds maximum allowed size")
+	}
 
 	data, err := os.ReadFile(filePath)
 	if err != nil {
