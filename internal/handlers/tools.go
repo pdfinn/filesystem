@@ -50,9 +50,8 @@ func (th *ToolHandlers) RegisterTools(srv *server.MCPServer) error {
 		{th.createListAllowedDirectoriesTool(), th.handleListAllowedDirectories},
 	}
 
-	// Register each tool with fixed upper bound per Rule 2
-	for i := 0; i < len(tools) && i < 20; i++ {
-		tool := tools[i]
+	// Register each tool
+	for _, tool := range tools {
 		srv.AddTool(tool.tool, tool.handler)
 		th.logger.Debug("Tool registered successfully", "tool", tool.tool.Name)
 	}
