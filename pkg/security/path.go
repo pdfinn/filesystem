@@ -19,9 +19,9 @@ func NewPathValidator(allowedDirs []string, logger *slog.Logger) *PathValidator 
 	// Pre-allocate with known size per Rule 3 (no dynamic allocation after init)
 	normalizedDirs := make([]string, 0, len(allowedDirs))
 
-	// Normalize all allowed directories with fixed upper bound per Rule 2
-	for i := 0; i < len(allowedDirs) && i < 1000; i++ {
-		dir := filepath.Clean(allowedDirs[i])
+	// Normalize all allowed directories
+	for _, d := range allowedDirs {
+		dir := filepath.Clean(d)
 		normalizedDirs = append(normalizedDirs, dir)
 	}
 
@@ -96,9 +96,8 @@ func (pv *PathValidator) expandHomePath(path string) string {
 func (pv *PathValidator) isPathAllowed(absolutePath string) bool {
 	normalizedPath := filepath.Clean(absolutePath)
 
-	// Check against each allowed directory with fixed upper bound per Rule 2
-	for i := 0; i < len(pv.allowedDirectories) && i < 1000; i++ {
-		allowedDir := pv.allowedDirectories[i]
+	// Check against each allowed directory
+	for _, allowedDir := range pv.allowedDirectories {
 
 		// Check if path starts with allowed directory
 		if pv.isPathUnderDirectory(normalizedPath, allowedDir) {
