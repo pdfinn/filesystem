@@ -78,10 +78,6 @@ func (pv *PathValidator) ValidatePath(requestedPath string) (string, error) {
 	return realPath, nil
 }
 
-// expandHomePath expands ~ and ~/ in file paths
-func (pv *PathValidator) expandHomePath(path string) string {
-	return ExpandHomePath(path)
-}
 
 // isPathAllowed checks if a path is within any allowed directory
 func (pv *PathValidator) isPathAllowed(absolutePath string) bool {
