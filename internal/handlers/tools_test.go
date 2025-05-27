@@ -132,6 +132,33 @@ func TestHandleMoveAndSearchFile(t *testing.T) {
 	}
 }
 
+func TestHandleMoveFileDestinationExists(t *testing.T) {
+	th, base := newTestHandlers(t)
+	ctx := context.Background()
+	src := filepath.Join(base, "src2.txt")
+	if err := os.WriteFile(src, []byte("z"), 0644); err != nil {
+		t.Fatalf("prep src: %v", err)
+	}
+	dst := filepath.Join(base, "dst2.txt")
+	if err := os.WriteFile(dst, []byte("existing"), 0644); err != nil {
+		t.Fatalf("prep dst: %v", err)
+	}
+
+	moveReq := newRequest(map[string]interface{}{"source": src, "destination": dst})
+	if _, err := th.handleMoveFile(ctx, moveReq); err == nil {
+		t.Fatalf("expected error for existing destination")
+	}
+
+	if _, err := os.Stat(src); err != nil {
+		t.Fatalf("source missing after failed move: %v", err)
+	}
+
+	data, err := os.ReadFile(dst)
+	if err != nil || string(data) != "existing" {
+		t.Fatalf("destination modified: %s %v", string(data), err)
+	}
+}
+
 func TestHandleGetFileInfo(t *testing.T) {
 	th, base := newTestHandlers(t)
 	ctx := context.Background()
