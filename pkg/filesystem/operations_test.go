@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"filesystem/pkg/security"
@@ -176,5 +177,62 @@ func TestEditFileDryRun(t *testing.T) {
 	}
 	if string(data) != original {
 		t.Fatalf("file modified on dry run")
+	}
+}
+
+func TestMoveFileCrossDevice(t *testing.T) {
+	ops, base := newOps(t)
+	src := filepath.Join(base, "src.txt")
+	dst := filepath.Join(base, "dst.txt")
+	if err := os.WriteFile(src, []byte("data"), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	oldRename := rename
+	rename = func(oldpath, newpath string) error {
+		return &os.LinkError{Op: "rename", Old: oldpath, New: newpath, Err: syscall.EXDEV}
+	}
+	defer func() { rename = oldRename }()
+
+	if err := ops.MoveFile(src, dst); err != nil {
+		t.Fatalf("move failed: %v", err)
+	}
+
+	data, err := os.ReadFile(dst)
+	if err != nil || string(data) != "data" {
+		t.Fatalf("destination content incorrect")
+	}
+	if _, err := os.Stat(src); !os.IsNotExist(err) {
+		t.Fatalf("source not removed")
+	}
+}
+
+func TestMoveDirectoryCrossDevice(t *testing.T) {
+	ops, base := newOps(t)
+	srcDir := filepath.Join(base, "src")
+	dstDir := filepath.Join(base, "dst")
+	if err := os.MkdirAll(srcDir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	f := filepath.Join(srcDir, "a.txt")
+	if err := os.WriteFile(f, []byte("x"), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	oldRename := rename
+	rename = func(oldpath, newpath string) error {
+		return &os.LinkError{Op: "rename", Old: oldpath, New: newpath, Err: syscall.EXDEV}
+	}
+	defer func() { rename = oldRename }()
+
+	if err := ops.MoveFile(srcDir, dstDir); err != nil {
+		t.Fatalf("move dir failed: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(dstDir, "a.txt")); err != nil {
+		t.Fatalf("dest file missing: %v", err)
+	}
+	if _, err := os.Stat(srcDir); !os.IsNotExist(err) {
+		t.Fatalf("source directory not removed")
 	}
 }
