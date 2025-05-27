@@ -199,8 +199,13 @@ func TestHandleInvalidPath(t *testing.T) {
 	defer os.Remove(outside)
 
 	req := newRequest(map[string]interface{}{"path": outside})
-	if _, err := th.handleReadFile(ctx, req); err == nil {
-		t.Fatalf("expected error for invalid path")
+	result, err := th.handleReadFile(ctx, req)
+	if err != nil {
+		t.Fatalf("unexpected Go error: %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Logf("Read result: %+v", result)
+		t.Fatalf("expected MCP error result for invalid path")
 	}
 }
 
