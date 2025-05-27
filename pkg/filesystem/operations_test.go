@@ -3,10 +3,13 @@ package filesystem
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"filesystem/pkg/security"
@@ -65,6 +68,28 @@ func TestDirectoryTreeSymlinkLoop(t *testing.T) {
 
 	if _, err := ops.DirectoryTree(base); err != nil {
 		t.Fatalf("tree with symlink failed: %v", err)
+	}
+}
+
+func TestDirectoryTreeInvalidPath(t *testing.T) {
+	ops, _ := newOps(t)
+	outside := filepath.Join(os.TempDir(), "outside")
+	if _, err := ops.DirectoryTree(outside); err == nil {
+		t.Fatalf("expected error for invalid path")
+	}
+}
+
+func TestDirectoryTreeDepthLimit(t *testing.T) {
+	ops, base := newOps(t)
+	d := base
+	for i := 0; i <= maxTreeDepth; i++ {
+		d = filepath.Join(d, fmt.Sprintf("d%02d", i))
+		if err := os.Mkdir(d, 0755); err != nil {
+			t.Fatalf("mkdir depth %d: %v", i, err)
+		}
+	}
+	if _, err := ops.DirectoryTree(base); err == nil {
+		t.Fatalf("expected depth limit error")
 	}
 }
 
@@ -176,5 +201,82 @@ func TestEditFileDryRun(t *testing.T) {
 	}
 	if string(data) != original {
 		t.Fatalf("file modified on dry run")
+	}
+}
+
+func TestMoveFileSuccess(t *testing.T) {
+	ops, base := newOps(t)
+	src := filepath.Join(base, "src.txt")
+	dest := filepath.Join(base, "dest.txt")
+	if err := os.WriteFile(src, []byte("x"), 0644); err != nil {
+		t.Fatalf("write src: %v", err)
+	}
+
+	if err := ops.MoveFile(src, dest); err != nil {
+		t.Fatalf("move failed: %v", err)
+	}
+	if _, err := os.Stat(src); !os.IsNotExist(err) {
+		t.Fatalf("source still exists")
+	}
+	if _, err := os.Stat(dest); err != nil {
+		t.Fatalf("dest missing: %v", err)
+	}
+}
+
+func TestMoveFileDestinationExists(t *testing.T) {
+	ops, base := newOps(t)
+	src := filepath.Join(base, "src.txt")
+	dest := filepath.Join(base, "dest.txt")
+	if err := os.WriteFile(src, []byte("x"), 0644); err != nil {
+		t.Fatalf("write src: %v", err)
+	}
+	if err := os.WriteFile(dest, []byte("y"), 0644); err != nil {
+		t.Fatalf("write dest: %v", err)
+	}
+	if err := ops.MoveFile(src, dest); err == nil {
+		t.Fatalf("expected error for existing destination")
+	}
+}
+
+func TestMoveFileCrossDevice(t *testing.T) {
+	ops, base := newOps(t)
+	mnt := filepath.Join(base, "mnt")
+	if err := os.Mkdir(mnt, 0755); err != nil {
+		t.Fatalf("mkdir mnt: %v", err)
+	}
+	if err := exec.Command("mount", "-t", "tmpfs", "tmpfs", mnt).Run(); err != nil {
+		t.Skipf("unable to mount tmpfs: %v", err)
+	}
+	defer exec.Command("umount", mnt).Run()
+
+	src := filepath.Join(base, "src.txt")
+	dest := filepath.Join(mnt, "dest.txt")
+	if err := os.WriteFile(src, []byte("x"), 0644); err != nil {
+		t.Fatalf("write src: %v", err)
+	}
+	if err := ops.MoveFile(src, dest); err == nil {
+		t.Fatalf("expected cross-device error")
+	}
+	if _, err := os.Stat(src); err != nil {
+		t.Fatalf("source missing after failed move: %v", err)
+	}
+}
+
+func TestDirectoryTreeInvalidPath(t *testing.T) {
+	ops, base := newOps(t)
+	invalid := filepath.Join(base, "no_such_dir")
+	if _, err := ops.DirectoryTree(invalid); err == nil {
+		t.Fatalf("expected error for invalid path")
+	}
+}
+
+func TestDirectoryTreeUnauthorizedPath(t *testing.T) {
+	ops, base := newOps(t)
+	outside := filepath.Join(os.TempDir(), "outside")
+	if err := os.MkdirAll(outside, 0755); err != nil {
+		t.Fatalf("mkdir outside: %v", err)
+	}
+	if _, err := ops.DirectoryTree(outside); err == nil {
+		t.Fatalf("expected error for unauthorized path")
 	}
 }

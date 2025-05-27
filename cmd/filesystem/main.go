@@ -16,9 +16,6 @@ import (
 )
 
 const (
-	// maxStartupRetries limits startup retry attempts per Rule 2 (fixed loop bounds)
-	maxStartupRetries = 3
-
 	// exitCodeSuccess indicates successful termination
 	exitCodeSuccess = 0
 
