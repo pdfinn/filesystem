@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"bytes"
 	"encoding/json"
 	"log/slog"
 	"os"
@@ -63,5 +64,35 @@ func TestDirectoryTreeSymlinkLoop(t *testing.T) {
 
 	if _, err := ops.DirectoryTree(base); err != nil {
 		t.Fatalf("tree with symlink failed: %v", err)
+	}
+}
+
+func TestReadFileWithinLimit(t *testing.T) {
+	ops, base := newOps(t)
+	p := filepath.Join(base, "small.txt")
+	content := bytes.Repeat([]byte("a"), 100)
+	if err := os.WriteFile(p, content, 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	got, err := ops.ReadFile(p)
+	if err != nil {
+		t.Fatalf("read failed: %v", err)
+	}
+	if got != string(content) {
+		t.Fatalf("unexpected content: %q", got)
+	}
+}
+
+func TestReadFileExceedsLimit(t *testing.T) {
+	ops, base := newOps(t)
+	p := filepath.Join(base, "big.txt")
+	data := bytes.Repeat([]byte("b"), int(maxReadSize)+1)
+	if err := os.WriteFile(p, data, 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	if _, err := ops.ReadFile(p); err == nil {
+		t.Fatalf("expected error for oversized file")
 	}
 }
