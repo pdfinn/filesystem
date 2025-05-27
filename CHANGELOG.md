@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.0.2] - 2025-05-28
+
+### Fixed - CRITICAL
+- **Claude Desktop Compatibility**: Fixed protocol version mismatch causing immediate disconnection
+  - Downgraded `mcp-go` library from v0.30.0 to v0.24.0 to use correct protocol version `2024-11-05`
+  - Claude Desktop expects protocol version `2024-11-05` but v0.30.0 was responding with `2025-03-26`
+  - Updated API calls to be compatible with older mcp-go version
+  - Server now properly establishes connection with Claude Desktop without premature disconnection
+
+### Technical Details
+- **Root Cause**: MCP-Go library v0.30.0 introduced protocol version `2025-03-26` which is incompatible with Claude Desktop
+- **Solution**: Reverted to mcp-go v0.24.0 which uses the expected `2024-11-05` protocol version
+- **API Changes**: Updated `getArguments()` function to handle direct `map[string]interface{}` type in older version
+- **Test Updates**: Fixed test structure to match older mcp-go API without `mcp.Meta` type
+
+### Verified
+- ✅ Server responds with correct protocol version `2024-11-05`
+- ✅ All 25+ tests still passing
+- ✅ Full MCP handshake works correctly
+- ✅ Ready for production use with Claude Desktop
+
 ## [1.0.1] - 2025-05-28
 
 ### Fixed
