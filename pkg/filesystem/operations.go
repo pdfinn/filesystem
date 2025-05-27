@@ -2,13 +2,16 @@ package filesystem
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/bmatcuk/doublestar/v4"
@@ -18,6 +21,9 @@ import (
 )
 
 const maxReadSize int64 = 1 * 1024 * 1024 // 1MB
+
+// maxTreeDepth defines the maximum depth DirectoryTree will recurse
+const maxTreeDepth int = 20
 
 // FileInfo represents detailed file information
 type FileInfo struct {
@@ -330,7 +336,13 @@ func (ops *Operations) DirectoryTree(dirPath string) (string, error) {
 		return "", fmt.Errorf("directory path cannot be empty")
 	}
 
-	ops.logger.Debug("Building directory tree", "path", dirPath)
+	// Validate the provided path
+	validPath, err := ops.pathValidator.ValidatePath(dirPath)
+	if err != nil {
+		return "", err
+	}
+
+	ops.logger.Debug("Building directory tree", "path", validPath)
 
 	// Validate root directory is within allowed paths
 	validPath, err := ops.pathValidator.ValidatePath(dirPath)
@@ -358,7 +370,10 @@ func (ops *Operations) DirectoryTree(dirPath string) (string, error) {
 }
 
 // buildTree recursively builds a tree structure
-func (ops *Operations) buildTree(dirPath string, visited map[string]bool) ([]TreeEntry, error) {
+func (ops *Operations) buildTree(dirPath string, visited map[string]bool, depth int) ([]TreeEntry, error) {
+	if depth > maxTreeDepth {
+		return nil, fmt.Errorf("maximum directory depth exceeded")
+	}
 	realPath, err := filepath.EvalSymlinks(dirPath)
 	if err != nil {
 		// If symlink resolution fails, fall back to cleaned path
@@ -402,7 +417,7 @@ func (ops *Operations) buildTree(dirPath string, visited map[string]bool) ([]Tre
 				// Skip this directory if validation fails
 				continue
 			}
-			children, err := ops.buildTree(validPath, visited)
+			children, err := ops.buildTree(validPath, visited, depth+1)
 			if err != nil {
 				ops.logger.Warn("Failed to build subtree", "path", subPath, "error", err)
 				// Continue with empty children rather than failing
@@ -438,14 +453,84 @@ func (ops *Operations) MoveFile(sourcePath, destPath string) error {
 		return fmt.Errorf("failed to check destination: %w", err)
 	}
 
-	err := os.Rename(sourcePath, destPath)
+	err := rename(sourcePath, destPath)
 	if err != nil {
-		ops.logger.Error("Failed to move file", "source", sourcePath, "destination", destPath, "error", err)
-		return fmt.Errorf("failed to move file: %w", err)
+		// Detect cross-device rename and fallback to copy/remove
+		if linkErr, ok := err.(*os.LinkError); ok && errors.Is(linkErr.Err, syscall.EXDEV) {
+			ops.logger.Debug("Cross-device rename detected, falling back to copy", "source", sourcePath, "destination", destPath)
+
+			if copyErr := copyRecursive(sourcePath, destPath); copyErr != nil {
+				ops.logger.Error("Copy fallback failed", "error", copyErr)
+				return fmt.Errorf("failed to copy during move: %w", copyErr)
+			}
+			if rmErr := os.RemoveAll(sourcePath); rmErr != nil {
+				ops.logger.Error("Failed to remove source after copy", "error", rmErr)
+				return fmt.Errorf("failed to remove source after copy: %w", rmErr)
+			}
+		} else {
+			ops.logger.Error("Failed to move file", "source", sourcePath, "destination", destPath, "error", err)
+			return fmt.Errorf("failed to move file: %w", err)
+		}
 	}
 
 	ops.logger.Info("File moved successfully", "source", sourcePath, "destination", destPath)
 	return nil
+}
+
+// copyRecursive copies a file or directory from src to dst.
+// It preserves file permissions and directory structure.
+func copyRecursive(src, dst string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		return copyDir(src, dst)
+	}
+	return copyFile(src, dst, info.Mode())
+}
+
+// copyDir recursively copies a directory tree.
+func copyDir(srcDir, dstDir string) error {
+	return filepath.WalkDir(srcDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(srcDir, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dstDir, rel)
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return os.MkdirAll(target, info.Mode())
+		}
+		return copyFile(path, target, info.Mode())
+	})
+}
+
+// copyFile copies a single file from src to dst using the provided permissions.
+func copyFile(src, dst string, perm fs.FileMode) error {
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return err
+	}
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, perm)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return err
+	}
+	return out.Close()
 }
 
 // SearchFiles recursively searches for files matching a pattern

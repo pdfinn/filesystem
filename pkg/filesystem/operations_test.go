@@ -3,11 +3,13 @@ package filesystem
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"filesystem/pkg/security"
@@ -66,6 +68,28 @@ func TestDirectoryTreeSymlinkLoop(t *testing.T) {
 
 	if _, err := ops.DirectoryTree(base); err != nil {
 		t.Fatalf("tree with symlink failed: %v", err)
+	}
+}
+
+func TestDirectoryTreeInvalidPath(t *testing.T) {
+	ops, _ := newOps(t)
+	outside := filepath.Join(os.TempDir(), "outside")
+	if _, err := ops.DirectoryTree(outside); err == nil {
+		t.Fatalf("expected error for invalid path")
+	}
+}
+
+func TestDirectoryTreeDepthLimit(t *testing.T) {
+	ops, base := newOps(t)
+	d := base
+	for i := 0; i <= maxTreeDepth; i++ {
+		d = filepath.Join(d, fmt.Sprintf("d%02d", i))
+		if err := os.Mkdir(d, 0755); err != nil {
+			t.Fatalf("mkdir depth %d: %v", i, err)
+		}
+	}
+	if _, err := ops.DirectoryTree(base); err == nil {
+		t.Fatalf("expected depth limit error")
 	}
 }
 
