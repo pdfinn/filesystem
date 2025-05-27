@@ -344,10 +344,16 @@ func (ops *Operations) DirectoryTree(dirPath string) (string, error) {
 
 	ops.logger.Debug("Building directory tree", "path", validPath)
 
+	// Validate root directory is within allowed paths
+	validPath, err := ops.pathValidator.ValidatePath(dirPath)
+	if err != nil {
+		return "", err
+	}
+
 	// Track visited real paths to avoid infinite recursion
 	visited := make(map[string]bool)
 
-	tree, err := ops.buildTree(validPath, visited, 0)
+	tree, err := ops.buildTree(validPath, visited)
 	if err != nil {
 		return "", err
 	}
