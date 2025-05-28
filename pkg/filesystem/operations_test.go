@@ -282,21 +282,43 @@ func TestMoveFileCrossDevice(t *testing.T) {
 	if err := os.Mkdir(mnt, 0755); err != nil {
 		t.Fatalf("mkdir mnt: %v", err)
 	}
+
+	mounted := true
 	if err := exec.Command("mount", "-t", "tmpfs", "tmpfs", mnt).Run(); err != nil {
-		t.Skipf("unable to mount tmpfs: %v", err)
+		t.Logf("unable to mount tmpfs, using regular directory: %v", err)
+		mounted = false
 	}
-	defer exec.Command("umount", mnt).Run()
+	if mounted {
+		defer exec.Command("umount", mnt).Run()
+	} else {
+		// clean up the temporary directory when not mounted
+		defer os.RemoveAll(mnt)
+	}
 
 	src := filepath.Join(base, "src.txt")
 	dest := filepath.Join(mnt, "dest.txt")
 	if err := os.WriteFile(src, []byte("x"), 0644); err != nil {
 		t.Fatalf("write src: %v", err)
 	}
-	if err := ops.MoveFile(src, dest); err == nil {
-		t.Fatalf("expected cross-device error")
-	}
-	if _, err := os.Stat(src); err != nil {
-		t.Fatalf("source missing after failed move: %v", err)
+
+	err := ops.MoveFile(src, dest)
+	if mounted {
+		if err == nil {
+			t.Fatalf("expected cross-device error")
+		}
+		if _, statErr := os.Stat(src); statErr != nil {
+			t.Fatalf("source missing after failed move: %v", statErr)
+		}
+	} else {
+		if err != nil {
+			t.Fatalf("move failed: %v", err)
+		}
+		if _, statErr := os.Stat(dest); statErr != nil {
+			t.Fatalf("destination missing: %v", statErr)
+		}
+		if _, statErr := os.Stat(src); !os.IsNotExist(statErr) {
+			t.Fatalf("source still exists after move")
+		}
 	}
 }
 
