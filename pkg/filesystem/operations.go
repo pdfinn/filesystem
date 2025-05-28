@@ -135,7 +135,7 @@ func (ops *Operations) WriteFile(filePath, content string) error {
 
 	ops.logger.Debug("Writing file", "path", filePath, "size", len(content))
 
-	err := os.WriteFile(filePath, []byte(content), 0644)
+	err := os.WriteFile(filePath, []byte(content), 0600)
 	if err != nil {
 		ops.logger.Error("Failed to write file", "path", filePath, "error", err)
 		return fmt.Errorf("failed to write file: %w", err)
@@ -295,7 +295,7 @@ func (ops *Operations) CreateDirectory(dirPath string) error {
 
 	ops.logger.Debug("Creating directory", "path", dirPath)
 
-	err := os.MkdirAll(dirPath, 0755)
+	err := os.MkdirAll(dirPath, 0750)
 	if err != nil {
 		ops.logger.Error("Failed to create directory", "path", dirPath, "error", err)
 		return fmt.Errorf("failed to create directory: %w", err)
@@ -513,7 +513,7 @@ func copyDir(srcDir, dstDir string) error {
 
 // copyFile copies a single file from src to dst using the provided permissions.
 func copyFile(src, dst string, perm fs.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(dst), 0750); err != nil {
 		return err
 	}
 	in, err := os.Open(src)
@@ -526,7 +526,9 @@ func copyFile(src, dst string, perm fs.FileMode) error {
 		return err
 	}
 	if _, err := io.Copy(out, in); err != nil {
-		out.Close()
+		if cerr := out.Close(); cerr != nil {
+			return fmt.Errorf("copy error: %v; close error: %v", err, cerr)
+		}
 		return err
 	}
 	return out.Close()
