@@ -267,6 +267,7 @@ gosec ./...
 - Follow Go conventions and best practices
 - Maintain security-first mindset
 - Add comprehensive tests for new features
+- Run `gosec ./...` to scan for vulnerabilities
 - Update documentation for API changes
 - Ensure compatibility with TypeScript version
 
