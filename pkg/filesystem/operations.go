@@ -71,26 +71,31 @@ func (ops *Operations) ReadFile(filePath string) (string, error) {
 		return "", fmt.Errorf("file path cannot be empty")
 	}
 
-	ops.logger.Debug("Reading file", "path", filePath)
-
-	info, err := os.Stat(filePath)
+	validPath, err := ops.pathValidator.ValidatePath(filePath)
 	if err != nil {
-		ops.logger.Error("Failed to stat file", "path", filePath, "error", err)
+		return "", err
+	}
+
+	ops.logger.Debug("Reading file", "path", validPath)
+
+	info, err := os.Stat(validPath)
+	if err != nil {
+		ops.logger.Error("Failed to stat file", "path", validPath, "error", err)
 		return "", fmt.Errorf("failed to stat file: %w", err)
 	}
 
 	if info.Size() > maxReadSize {
-		ops.logger.Warn("File size exceeds limit", "path", filePath, "size", info.Size())
+		ops.logger.Warn("File size exceeds limit", "path", validPath, "size", info.Size())
 		return "", fmt.Errorf("file exceeds maximum allowed size")
 	}
 
-	data, err := os.ReadFile(filePath)
+	data, err := os.ReadFile(validPath)
 	if err != nil {
-		ops.logger.Error("Failed to read file", "path", filePath, "error", err)
+		ops.logger.Error("Failed to read file", "path", validPath, "error", err)
 		return "", fmt.Errorf("failed to read file: %w", err)
 	}
 
-	ops.logger.Debug("File read successfully", "path", filePath, "size", len(data))
+	ops.logger.Debug("File read successfully", "path", validPath, "size", len(data))
 	return string(data), nil
 }
 
@@ -128,20 +133,24 @@ func (ops *Operations) WriteFile(filePath, content string) error {
 		return fmt.Errorf("file path cannot be empty")
 	}
 
+	validPath, err := ops.pathValidator.ValidatePath(filePath)
+	if err != nil {
+		return err
+	}
+
 	if int64(len(content)) > maxWriteSize {
-		ops.logger.Warn("Content size exceeds limit", "path", filePath, "size", len(content))
+		ops.logger.Warn("Content size exceeds limit", "path", validPath, "size", len(content))
 		return fmt.Errorf("content exceeds maximum allowed size")
 	}
 
-	ops.logger.Debug("Writing file", "path", filePath, "size", len(content))
-
-	err := os.WriteFile(filePath, []byte(content), 0600)
+	ops.logger.Debug("Writing file", "path", validPath, "size", len(content))
+	err = os.WriteFile(validPath, []byte(content), 0644)
 	if err != nil {
-		ops.logger.Error("Failed to write file", "path", filePath, "error", err)
+		ops.logger.Error("Failed to write file", "path", validPath, "error", err)
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 
-	ops.logger.Info("File written successfully", "path", filePath, "size", len(content))
+	ops.logger.Info("File written successfully", "path", validPath, "size", len(content))
 	return nil
 }
 
@@ -155,10 +164,15 @@ func (ops *Operations) EditFile(filePath string, edits []EditOperation, dryRun b
 		return "", fmt.Errorf("no edits provided")
 	}
 
-	ops.logger.Debug("Editing file", "path", filePath, "edits_count", len(edits), "dry_run", dryRun)
+	validPath, err := ops.pathValidator.ValidatePath(filePath)
+	if err != nil {
+		return "", err
+	}
+
+	ops.logger.Debug("Editing file", "path", validPath, "edits_count", len(edits), "dry_run", dryRun)
 
 	// Read original content
-	originalContent, err := ops.ReadFile(filePath)
+	originalContent, err := ops.ReadFile(validPath)
 	if err != nil {
 		return "", err
 	}
@@ -170,17 +184,17 @@ func (ops *Operations) EditFile(filePath string, edits []EditOperation, dryRun b
 	}
 
 	// Create diff
-	diff := ops.createUnifiedDiff(originalContent, modifiedContent, filePath)
+	diff := ops.createUnifiedDiff(originalContent, modifiedContent, validPath)
 
 	// Write file if not dry run
 	if !dryRun {
-		err = ops.WriteFile(filePath, modifiedContent)
+		err = ops.WriteFile(validPath, modifiedContent)
 		if err != nil {
 			return "", err
 		}
-		ops.logger.Info("File edits applied", "path", filePath, "edits_count", len(edits))
+		ops.logger.Info("File edits applied", "path", validPath, "edits_count", len(edits))
 	} else {
-		ops.logger.Debug("Dry run completed", "path", filePath)
+		ops.logger.Debug("Dry run completed", "path", validPath)
 	}
 
 	return diff, nil
@@ -293,15 +307,20 @@ func (ops *Operations) CreateDirectory(dirPath string) error {
 		return fmt.Errorf("directory path cannot be empty")
 	}
 
-	ops.logger.Debug("Creating directory", "path", dirPath)
-
-	err := os.MkdirAll(dirPath, 0750)
+	validPath, err := ops.pathValidator.ValidatePath(dirPath)
 	if err != nil {
-		ops.logger.Error("Failed to create directory", "path", dirPath, "error", err)
+		return err
+	}
+
+	ops.logger.Debug("Creating directory", "path", validPath)
+
+	err = os.MkdirAll(validPath, 0755)
+	if err != nil {
+		ops.logger.Error("Failed to create directory", "path", validPath, "error", err)
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	ops.logger.Info("Directory created successfully", "path", dirPath)
+	ops.logger.Info("Directory created successfully", "path", validPath)
 	return nil
 }
 
@@ -441,38 +460,47 @@ func (ops *Operations) MoveFile(sourcePath, destPath string) error {
 		return fmt.Errorf("destination path cannot be empty")
 	}
 
-	ops.logger.Debug("Moving file", "source", sourcePath, "destination", destPath)
+	srcValid, err := ops.pathValidator.ValidatePath(sourcePath)
+	if err != nil {
+		return err
+	}
+	destValid, err := ops.pathValidator.ValidatePath(destPath)
+	if err != nil {
+		return err
+	}
+
+	ops.logger.Debug("Moving file", "source", srcValid, "destination", destValid)
 
 	// Check if destination already exists to avoid overwriting
-	if _, err := os.Stat(destPath); err == nil {
-		ops.logger.Warn("Destination already exists", "path", destPath)
+	if _, err := os.Stat(destValid); err == nil {
+		ops.logger.Warn("Destination already exists", "path", destValid)
 		return fmt.Errorf("destination already exists")
 	} else if !os.IsNotExist(err) {
-		ops.logger.Error("Failed to check destination", "path", destPath, "error", err)
+		ops.logger.Error("Failed to check destination", "path", destValid, "error", err)
 		return fmt.Errorf("failed to check destination: %w", err)
 	}
 
-	err := os.Rename(sourcePath, destPath)
+	err = os.Rename(srcValid, destValid)
 	if err != nil {
 		// Detect cross-device rename and fallback to copy/remove
 		if linkErr, ok := err.(*os.LinkError); ok && errors.Is(linkErr.Err, syscall.EXDEV) {
-			ops.logger.Debug("Cross-device rename detected, falling back to copy", "source", sourcePath, "destination", destPath)
+			ops.logger.Debug("Cross-device rename detected, falling back to copy", "source", srcValid, "destination", destValid)
 
-			if copyErr := copyRecursive(sourcePath, destPath); copyErr != nil {
+			if copyErr := copyRecursive(srcValid, destValid); copyErr != nil {
 				ops.logger.Error("Copy fallback failed", "error", copyErr)
 				return fmt.Errorf("failed to copy during move: %w", copyErr)
 			}
-			if rmErr := os.RemoveAll(sourcePath); rmErr != nil {
+			if rmErr := os.RemoveAll(srcValid); rmErr != nil {
 				ops.logger.Error("Failed to remove source after copy", "error", rmErr)
 				return fmt.Errorf("failed to remove source after copy: %w", rmErr)
 			}
 		} else {
-			ops.logger.Error("Failed to move file", "source", sourcePath, "destination", destPath, "error", err)
+			ops.logger.Error("Failed to move file", "source", srcValid, "destination", destValid, "error", err)
 			return fmt.Errorf("failed to move file: %w", err)
 		}
 	}
 
-	ops.logger.Info("File moved successfully", "source", sourcePath, "destination", destPath)
+	ops.logger.Info("File moved successfully", "source", srcValid, "destination", destValid)
 	return nil
 }
 
@@ -617,11 +645,16 @@ func (ops *Operations) GetFileInfo(filePath string) (*FileInfo, error) {
 		return nil, fmt.Errorf("file path cannot be empty")
 	}
 
-	ops.logger.Debug("Getting file info", "path", filePath)
-
-	stat, err := os.Stat(filePath)
+	validPath, err := ops.pathValidator.ValidatePath(filePath)
 	if err != nil {
-		ops.logger.Error("Failed to get file info", "path", filePath, "error", err)
+		return nil, err
+	}
+
+	ops.logger.Debug("Getting file info", "path", validPath)
+
+	stat, err := os.Stat(validPath)
+	if err != nil {
+		ops.logger.Error("Failed to get file info", "path", validPath, "error", err)
 		return nil, fmt.Errorf("failed to get file info: %w", err)
 	}
 
@@ -643,6 +676,6 @@ func (ops *Operations) GetFileInfo(filePath string) (*FileInfo, error) {
 		info.Accessed = stat.ModTime()
 	}
 
-	ops.logger.Debug("File info retrieved successfully", "path", filePath)
+	ops.logger.Debug("File info retrieved successfully", "path", validPath)
 	return info, nil
 }
