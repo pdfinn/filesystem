@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -42,7 +43,11 @@ func Load(configPath string) (*Config, error) {
 	}
 
 	// Read configuration file with validation
-	data, err := os.ReadFile(configPath)
+	cleanPath := filepath.Clean(configPath)
+	if strings.Contains(cleanPath, "..") {
+		return nil, fmt.Errorf("invalid configuration path")
+	}
+	data, err := os.ReadFile(cleanPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
